@@ -135,8 +135,7 @@ if __name__ == '__main__':
             'keypoint_threshold': args.keypoint_th,
             'max_keypoints': args.max_keypoints
         },
-        'superglue': {
-            'weights': args.superglue,
+        'matcher': {
             'sinkhorn_iterations': args.sinkhorn_iterations,
             'match_threshold': args.match_th,
             'descriptor_dim': 256 if args.feature == 'spp' else 128,
@@ -159,21 +158,19 @@ if __name__ == '__main__':
     }
 
     if args.network == 'superglue':
-        model = SuperGlue(config.get('superglue', {}))
+        model = SuperGlue(config.get('matcher', {}))
     elif args.network == 'graphmatcher':
-        model = GraphMatcher(config.get('superglue', {}))
+        model = GraphMatcher(config.get('matcher', {}))
     elif args.network == 'gm':
-        model = GM(config.get('superglue', {}))
+        model = GM(config.get('matcher', {}))
     elif args.network == 'dgnn':
-        model = DGNN(config.get('superglue', {}))
+        model = DGNN(config.get('matcher', {}))
     elif args.network == 'dgnnp':
-        model = DGNNP(config.get('superglue', {}))
+        model = DGNNP(config.get('matcher', {}))
     elif args.network == 'dgnns':
-        model = DGNNS(config.get('superglue', {}))
+        model = DGNNS(config.get('matcher', {}))
     elif args.network == 'dgnnps':
-        model = DGNNPS(config.get('superglue', {}))
-    elif args.network == 'adagmn':
-        model = AdaGMN(config.get('superglue', {}))
+        model = DGNNPS(config.get('matcher', {}))
 
     if args.local_rank == 0:
         print('model: ', model)

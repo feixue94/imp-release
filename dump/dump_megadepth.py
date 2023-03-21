@@ -1,21 +1,20 @@
 # -*- coding: UTF-8 -*-
 '''=================================================
-@Project -> File   pnba -> dump_megadepth
+@Project -> File   imp -> dump_megadepth
 @IDE    PyCharm
 @Author fx221@cam.ac.uk
-@Date   29/03/2022 12:26
+@Date   30/11/2022 12:01
 =================================================='''
 import os
 import os.path as osp
-import cv2
 import numpy as np
+import cv2
 import torch
-from tqdm import tqdm
 import h5py
+from tqdm import tqdm
 from torch.utils.data import Dataset
 from nets.superpoint import SuperPoint
-from tools.geometry import match_from_projection_points, match_from_projection_points_torch, \
-    match_from_projection_points_torch_v2
+from tools.geometry import match_from_projection_points_torch
 
 
 def plot_matches_cv2(image0, image1, kpts0, kpts1, matches, margin=10, inliers=None):
@@ -180,456 +179,9 @@ class Megadepth:
         return len(self.image_paths)
 
     def build_correspondence(self, scene, save_dir, show_match=False, pre_load=False):
-        keypoint_dir = osp.join(save_dir, 'keypoints', scene)
-        # match_dir = osp.join(save_dir, 'matches_20220506_v2', scene)
-        match_dir = osp.join(save_dir, 'matches_20220512_v1')
-
-        if osp.isfile(osp.join(match_dir, scene + '.npy')):
-            return
-
-        scene_info_path = osp.join(self.scene_info_path, '{:s}.0.npz'.format(scene))
-        # print(scene_info_path)
-
-        if not osp.exists(scene_info_path):
-            return
-
-        if osp.exists(osp.join(match_dir, scene + '.npy')):
-            return
-
-        scene_info = np.load(scene_info_path, allow_pickle=True)
-        overlap_matrix = scene_info['overlap_matrix']
-        scale_ratio_matrix = scene_info['scale_ratio_matrix']
-
-        valid = np.logical_and(
-            np.logical_and(overlap_matrix >= self.min_overlap_ratio,
-                           overlap_matrix <= self.max_overlap_ratio),
-            scale_ratio_matrix <= self.max_scale_ratio
-        )
-
-        pairs = np.vstack(np.where(valid))
-        selected_ids = np.arange(0, pairs.shape[1])
-        print('Find {:d} pairs from scene {:s}'.format(len(selected_ids), scene))
-
-        image_paths = scene_info['image_paths']
-        depth_paths = scene_info['depth_paths']
-        points3D_id_to_2D = scene_info['points3D_id_to_2D']
-        # points3D_id_to_ndepth = scene_info['points3D_id_to_ndepth']
-        intrinsics = scene_info['intrinsics']
-        poses = scene_info['poses']
-        valid_pairs = []
-
-        all_keypoints = {}
-        if pre_load:
-            print('Loading keypoints...')
-            for img_path in tqdm(image_paths, total=len(image_paths)):
-                if img_path is None:
-                    continue
-                kpt_fn = osp.join(keypoint_dir, img_path.split('/')[-1] + '_' + self.feature_type + '.npy')
-                if osp.isfile(kpt_fn):
-                    data = np.load(kpt_fn, allow_pickle=True).item()
-                    all_keypoints[kpt_fn] = data
-
-        if show_match:
-            cv2.namedWindow('img', cv2.WINDOW_NORMAL)
-
-        visited_pairs = []
-        for pair_idx in tqdm(selected_ids, total=len(selected_ids)):
-            idx1 = pairs[0, pair_idx]
-            idx2 = pairs[1, pair_idx]
-
-            matches = np.array(list(
-                points3D_id_to_2D[idx1].keys() &
-                points3D_id_to_2D[idx2].keys()
-            ))
-
-            if len(matches) < 20:
-                continue
-
-            # conditions for rejecting pairs
-            # number of spp points
-            # image size
-            image_path1 = image_paths[idx1]
-            image_path2 = image_paths[idx2]
-            # depth_path1 = depth_paths[idx1]
-            # depth_path2 = depth_paths[idx2]
-            pose1 = poses[idx1]
-            pose2 = poses[idx2]
-            intrinsics1 = intrinsics[idx1]
-            intrinsics2 = intrinsics[idx2]
-
-            # if image_path1 + image_path2 in visited_pairs:
-            #     continue
-            # visited_pairs.append(image_path1 + image_path2)
-            # visited_pairs.append(image_path2 + image_path1)
-
-            # if image_path1 in invalid_fns or image_path2 in invalid_fns:
-            #     continue
-            kpt_fn1 = osp.join(keypoint_dir, image_path1.split('/')[-1] + '_' + self.feature_type + '.npy')
-            if kpt_fn1 in all_keypoints.keys():
-                data1 = all_keypoints[kpt_fn1]
-            else:
-                data1 = np.load(kpt_fn1, allow_pickle=True).item()
-                all_keypoints[kpt_fn1] = data1
-
-            kpts1 = data1['keypoints']
-            depth1 = data1['depth']
-
-            kpt_fn2 = osp.join(keypoint_dir, image_path2.split('/')[-1] + '_' + self.feature_type + '.npy')
-            if kpt_fn2 in all_keypoints.keys():
-                data2 = all_keypoints[kpt_fn2]
-            else:
-                data2 = np.load(kpt_fn2, allow_pickle=True).item()
-                all_keypoints[kpt_fn2] = data2
-
-            kpts2 = data2['keypoints']
-            # scores2 = data2['scores']
-            # descs2 = data2['descriptors']
-            depth2 = data2['depth']
-
-            full_ids1 = [v for v in range(kpts1.shape[0])]
-            valid_kpt_ids1 = (depth1 > 0)
-            valid_kpts1 = kpts1[valid_kpt_ids1]
-            valid_depth1 = depth1[valid_kpt_ids1]
-
-            full_ids2 = [v for v in range(kpts2.shape[0])]
-            valid_kpt_ids2 = (depth2 > 0)
-            valid_kpts2 = kpts2[valid_kpt_ids2]
-            valid_depth2 = depth2[valid_kpt_ids2]
-
-            if np.sum(valid_kpt_ids1) <= 20 or np.sum(valid_kpt_ids2) <= 20:
-                continue
-
-            kpts1 = valid_kpts1
-            depth1 = valid_depth1
-            full_ids1 = full_ids1[valid_kpt_ids1]
-
-            kpts2 = valid_kpts2
-            depth2 = valid_depth2
-            full_ids2 = full_ids2[valid_kpt_ids2]
-
-            # inlier_matches, outlier_matches = match_from_projection_points(
-            #     pos1=kpts1.transpose(), depth1=depth1, intrinsics1=intrinsics1, pose1=pose1, bbox1=None,
-            #     pos2=kpts2.transpose(), depth2=depth2, intrinsics2=intrinsics2, pose2=pose2, bbox2=None,
-            #     inlier_th=self.inlier_th, outlier_th=15, cycle_check=True,
-            # )
-
-            with torch.no_grad():
-                inlier_matches12, inlier_matches21, outlier_matches12, outlier_matches21 = match_from_projection_points_torch_v2(
-                    pos1=torch.from_numpy(kpts1.transpose()).float().cuda(),
-                    depth1=torch.from_numpy(depth1).float().cuda(),
-                    intrinsics1=torch.from_numpy(intrinsics1).float().cuda(),
-                    pose1=torch.from_numpy(pose1).float().cuda(),
-                    bbox1=None,
-                    pos2=torch.from_numpy(kpts2.transpose()).float().cuda(),
-                    depth2=torch.from_numpy(depth2).float().cuda(),
-                    intrinsics2=torch.from_numpy(intrinsics2).float().cuda(),
-                    pose2=torch.from_numpy(pose2).float().cuda(),
-                    bbox2=None,
-                    inlier_th=3, outlier_th=5, cycle_check=True,
-                )
-                inlier_matches12 = inlier_matches12.cpu().numpy()  # [N, 2]
-                inlier_matches21 = inlier_matches21.cpu().numpy()  # [N, 2]
-                outlier_matches12 = outlier_matches12.cpu().numpy()
-                outlier_matches21 = outlier_matches21.cpu().numpy()
-
-                matches12 = {}
-                matches21 = {}
-                for p in inlier_matches12:
-                    if p[0] in matches12.keys():
-                        continue
-                    matches12[p[0]] = p[1]
-                for p in inlier_matches21:
-                    if p[0] in matches21.keys():
-                        continue
-                    matches21[p[0]] = p[1]
-
-            matched_ids1 = []
-            matched_ids2 = []
-            umatched_ids1 = []
-            umatched_ids2 = []
-            inlier_matches = []
-
-            for p1 in matches12.keys():
-                p12 = matches12[p1]
-                if p12 not in matches21.keys():
-                    continue
-                p21 = matches21[p12]
-                if p1 != p21:
-                    continue
-                inlier_matches.append((p1, p12))
-
-                # matched_ids1.append(p1)
-                # matched_ids2.append(p12)
-
-                matched_ids1.append(p1)
-                matched_ids2.append(p12)
-
-            for p in outlier_matches12:
-                if p[0] in matches12.keys() or p[1] in matches21.keys():
-                    continue
-                umatched_ids1.append(p[0])
-
-            for p in outlier_matches21:
-                if p[0] in matches21.keys() or p[1] in matches12.keys():
-                    continue
-                umatched_ids2.append(p[0])
-
-            inlier_matches = np.array(inlier_matches)
-            # print('m12/m21/mcycle: ', inlier_matches12.shape, inlier_matches21.shape, inlier_matches.shape,
-            #       len(umatched_ids1), len(umatched_ids2))
-            if inlier_matches.shape[0] <= 20:
-                continue
-
-            if show_match:
-                img1 = cv2.imread(osp.join(self.base_path, image_path1))
-                img2 = cv2.imread(osp.join(self.base_path, image_path2))
-                img_match = plot_matches_cv2(image0=img1, image1=img2, kpts0=kpts1, kpts1=kpts2, matches=inlier_matches)
-                cv2.imshow('img', img_match)
-                cv2.waitKey(0)
-
-            valid_pairs.append({
-                'image_path1': image_paths[idx1],
-                'depth_path1': depth_paths[idx1],
-                'intrinsics1': intrinsics[idx1],
-                'pose1': poses[idx1],
-                'image_path2': image_paths[idx2],
-                'depth_path2': depth_paths[idx2],
-                'intrinsics2': intrinsics[idx2],
-                'pose2': poses[idx2],
-                'matched_ids1': np.array(matched_ids1, dtype=int),
-                'matched_ids2': np.array(matched_ids2, dtype=int),
-                'umatched_ids1': np.array(umatched_ids1, dtype=int),
-                'umatched_ids2': np.array(umatched_ids2, dtype=int),
-            })
-
-            # if len(valid_pairs) > 1:
-            #     break
-
-        if len(valid_pairs) > 0:
-            # k = 20000
-            # if len(valid_pairs) > k:
-            #     n = len(valid_pairs) // k
-            #     for ni in range(n):
-            #         if ni == n - 1:
-            #             np.save(osp.join(match_dir, scene + '.{:d}'.format(ni)), valid_pairs[ni * k:])
-            #         else:
-            #             np.save(osp.join(match_dir, scene + '.{:d}'.format(ni)), valid_pairs[ni * k: (ni + 1) * k])
-            # else:
-            np.save(osp.join(match_dir, scene), valid_pairs)
-            # os.makedirs(match_dir, exist_ok=True)
-            # for ni, p in enumerate(valid_pairs):
-            #     np.save(osp.join(match_dir, '{:d}'.format(ni)), p)
-        print('Find {:d}/{:d} valid pairs from scene {:s}'.format(len(valid_pairs), len(selected_ids), scene))
-        scene_nvalid = {}
-        scene_nvalid[scene] = len(valid_pairs)
-        np.save('{:s}_nvalid'.format(scene), scene_nvalid)
-        del all_keypoints
-
-    def build_correspondence_v2(self, scene, save_dir, show_match=False, pre_load=False):
-        keypoint_dir = osp.join(save_dir, 'keypoints', scene)
-        # match_dir = osp.join(save_dir, 'matches_20220506_v2', scene)
-        match_dir = osp.join(save_dir, 'matches_20220512_v1')
-
-        if osp.isfile(osp.join(match_dir, scene + '.npy')):
-            return
-
-        scene_info_path = osp.join(self.scene_info_path, '{:s}.0.npz'.format(scene))
-        # print(scene_info_path)
-
-        if not osp.exists(scene_info_path):
-            return
-
-        if osp.exists(osp.join(match_dir, scene + '.npy')):
-            return
-
-        scene_info = np.load(scene_info_path, allow_pickle=True)
-        overlap_matrix = scene_info['overlap_matrix']
-        scale_ratio_matrix = scene_info['scale_ratio_matrix']
-
-        valid = np.logical_and(
-            np.logical_and(overlap_matrix >= self.min_overlap_ratio,
-                           overlap_matrix <= self.max_overlap_ratio),
-            scale_ratio_matrix <= self.max_scale_ratio
-        )
-
-        pairs = np.vstack(np.where(valid))
-        selected_ids = np.arange(0, pairs.shape[1])
-        print('Find {:d} pairs from scene {:s}'.format(len(selected_ids), scene))
-
-        image_paths = scene_info['image_paths']
-        depth_paths = scene_info['depth_paths']
-        points3D_id_to_2D = scene_info['points3D_id_to_2D']
-        # points3D_id_to_ndepth = scene_info['points3D_id_to_ndepth']
-        intrinsics = scene_info['intrinsics']
-        poses = scene_info['poses']
-        valid_pairs = []
-
-        all_keypoints = {}
-        if pre_load:
-            print('Loading keypoints...')
-            for img_path in tqdm(image_paths, total=len(image_paths)):
-                if img_path is None:
-                    continue
-                kpt_fn = osp.join(keypoint_dir, img_path.split('/')[-1] + '_' + self.feature_type + '.npy')
-                if osp.isfile(kpt_fn):
-                    data = np.load(kpt_fn, allow_pickle=True).item()
-                    all_keypoints[kpt_fn] = data
-
-        if show_match:
-            cv2.namedWindow('img', cv2.WINDOW_NORMAL)
-
-        visited_pairs = []
-        for pair_idx in tqdm(selected_ids, total=len(selected_ids)):
-            idx1 = pairs[0, pair_idx]
-            idx2 = pairs[1, pair_idx]
-
-            matches = np.array(list(
-                points3D_id_to_2D[idx1].keys() &
-                points3D_id_to_2D[idx2].keys()
-            ))
-
-            if len(matches) < 20:
-                continue
-
-            # conditions for rejecting pairs
-            # number of spp points
-            # image size
-            image_path1 = image_paths[idx1]
-            image_path2 = image_paths[idx2]
-            # depth_path1 = depth_paths[idx1]
-            # depth_path2 = depth_paths[idx2]
-            pose1 = poses[idx1]
-            pose2 = poses[idx2]
-            intrinsics1 = intrinsics[idx1]
-            intrinsics2 = intrinsics[idx2]
-
-            # if image_path1 + image_path2 in visited_pairs:
-            #     continue
-            # visited_pairs.append(image_path1 + image_path2)
-            # visited_pairs.append(image_path2 + image_path1)
-
-            # if image_path1 in invalid_fns or image_path2 in invalid_fns:
-            #     continue
-            kpt_fn1 = osp.join(keypoint_dir, image_path1.split('/')[-1] + '_' + self.feature_type + '.npy')
-            if kpt_fn1 in all_keypoints.keys():
-                data1 = all_keypoints[kpt_fn1]
-            else:
-                data1 = np.load(kpt_fn1, allow_pickle=True).item()
-                all_keypoints[kpt_fn1] = data1
-
-            kpts1 = data1['keypoints']
-            depth1 = data1['depth']
-
-            kpt_fn2 = osp.join(keypoint_dir, image_path2.split('/')[-1] + '_' + self.feature_type + '.npy')
-            if kpt_fn2 in all_keypoints.keys():
-                data2 = all_keypoints[kpt_fn2]
-            else:
-                data2 = np.load(kpt_fn2, allow_pickle=True).item()
-                all_keypoints[kpt_fn2] = data2
-
-            kpts2 = data2['keypoints']
-            depth2 = data2['depth']
-
-            full_ids1 = np.array([v for v in range(kpts1.shape[0])])
-            valid_kpt_ids1 = (depth1 > 0)
-            valid_kpts1 = kpts1[valid_kpt_ids1]
-            valid_depth1 = depth1[valid_kpt_ids1]
-            valid_ids1 = full_ids1[valid_kpt_ids1]
-
-            full_ids2 = np.array([v for v in range(kpts2.shape[0])])
-            valid_kpt_ids2 = (depth2 > 0)
-            valid_kpts2 = kpts2[valid_kpt_ids2]
-            valid_depth2 = depth2[valid_kpt_ids2]
-            valid_ids2 = full_ids2[valid_kpt_ids2]
-
-            if valid_ids1.shape[0] <= 20 or valid_ids2.shape[0] <= 20:
-                continue
-
-            # kpts1 = valid_kpts1
-            # depth1 = valid_depth1
-
-            # kpts2 = valid_kpts2
-            # depth2 = valid_depth2
-
-            # inlier_matches, outlier_matches = match_from_projection_points(
-            #     pos1=kpts1.transpose(), depth1=depth1, intrinsics1=intrinsics1, pose1=pose1, bbox1=None,
-            #     pos2=kpts2.transpose(), depth2=depth2, intrinsics2=intrinsics2, pose2=pose2, bbox2=None,
-            #     inlier_th=self.inlier_th, outlier_th=15, cycle_check=True,
-            # )
-
-            with torch.no_grad():
-                inlier_matches, outlier_matches = match_from_projection_points_torch(
-                    pos1=torch.from_numpy(valid_kpts1.transpose()).float().cuda(),
-                    depth1=torch.from_numpy(valid_depth1).float().cuda(),
-                    intrinsics1=torch.from_numpy(intrinsics1).float().cuda(),
-                    pose1=torch.from_numpy(pose1).float().cuda(),
-                    bbox1=None,
-                    pos2=torch.from_numpy(valid_kpts2.transpose()).float().cuda(),
-                    depth2=torch.from_numpy(valid_depth2).float().cuda(),
-                    intrinsics2=torch.from_numpy(intrinsics2).float().cuda(),
-                    pose2=torch.from_numpy(pose2).float().cuda(),
-                    bbox2=None,
-                    inlier_th=5, outlier_th=15, cycle_check=True,
-                )
-                inlier_matches = inlier_matches.cpu().numpy()
-                outlier_matches = outlier_matches.cpu().numpy()
-
-            # print('valid1/2: ', valid_ids1.shape, valid_ids2.shape, inlier_matches.shape)
-
-            if inlier_matches.shape[0] <= 20:
-                continue
-
-            matched_ids1 = []
-            matched_ids2 = []
-            for m in inlier_matches:
-                if valid_ids1[m[0]] in matched_ids1 or valid_ids2[m[1]] in matched_ids2:
-                    continue
-                matched_ids1.append(valid_ids1[m[0]])
-                matched_ids2.append(valid_ids2[m[1]])
-
-            inlier_matches = np.array([matched_ids1, matched_ids2], dtype=int).transpose()
-            # print(inlier_matches.shape)
-
-            if show_match:
-                img1 = cv2.imread(osp.join(self.base_path, image_path1))
-                img2 = cv2.imread(osp.join(self.base_path, image_path2))
-                img_match = plot_matches_cv2(image0=img1, image1=img2, kpts0=kpts1, kpts1=kpts2, matches=inlier_matches)
-                cv2.imshow('img', img_match)
-                cv2.waitKey(0)
-
-            valid_pairs.append({
-                'image_path1': image_paths[idx1],
-                'depth_path1': depth_paths[idx1],
-                'intrinsics1': intrinsics[idx1],
-                'pose1': poses[idx1],
-                'image_path2': image_paths[idx2],
-                'depth_path2': depth_paths[idx2],
-                'intrinsics2': intrinsics[idx2],
-                'pose2': poses[idx2],
-                'matched_ids1': np.array(matched_ids1, dtype=int),
-                'matched_ids2': np.array(matched_ids2, dtype=int),
-                # 'umatched_ids1': np.array(umatched_ids1, dtype=int),
-                # 'umatched_ids2': np.array(umatched_ids2, dtype=int),
-            })
-
-            # if len(valid_pairs) > 10:
-            #     break
-
-        if len(valid_pairs) > 0:
-            np.save(osp.join(match_dir, scene), valid_pairs)
-            # os.makedirs(match_dir, exist_ok=True)
-            # for ni, p in enumerate(valid_pairs):
-            #     np.save(osp.join(match_dir, '{:d}'.format(ni)), p)
-        print('Find {:d}/{:d} valid pairs from scene {:s}'.format(len(valid_pairs), len(selected_ids), scene))
-        scene_nvalid = {}
-        scene_nvalid[scene] = len(valid_pairs)
-        np.save('{:s}_nvalid'.format(scene), scene_nvalid)
-        del all_keypoints
-
-    def build_correspondence_v3(self, scene, save_dir, feature_type='sift', show_match=False, pre_load=False):
-        keypoint_dir = osp.join(save_dir, 'keypoints_sift', scene)
-        match_dir = osp.join(save_dir, 'matches_20220512_v1_sift')
-        print(match_dir)
+        keypoint_dir = osp.join(save_dir, 'keypoints_{:s}'.format(self.feature_type), scene)
+        match_dir = osp.join(save_dir, 'matches_{:s}'.format(self.feature_type))
+        print(keypoint_dir, match_dir)
 
         if osp.isfile(osp.join(match_dir, scene + '.npy')):
             return
@@ -680,8 +232,6 @@ class Megadepth:
 
         if show_match:
             cv2.namedWindow('img', cv2.WINDOW_NORMAL)
-
-        visited_pairs = []
         for pair_idx in tqdm(selected_ids, total=len(selected_ids)):
             idx1 = pairs[0, pair_idx]
             idx2 = pairs[1, pair_idx]
@@ -706,13 +256,6 @@ class Megadepth:
             intrinsics1 = intrinsics[idx1]
             intrinsics2 = intrinsics[idx2]
 
-            # if image_path1 + image_path2 in visited_pairs:
-            #     continue
-            # visited_pairs.append(image_path1 + image_path2)
-            # visited_pairs.append(image_path2 + image_path1)
-
-            # if image_path1 in invalid_fns or image_path2 in invalid_fns:
-            #     continue
             kpt_fn1 = osp.join(keypoint_dir, image_path1.split('/')[-1] + '_' + feature_type + '.npy')
             if kpt_fn1 in all_keypoints.keys():
                 data1 = all_keypoints[kpt_fn1]
@@ -832,8 +375,32 @@ class Megadepth:
         print('Find {:d}/{:d} valid pairs from scene {:s}'.format(len(valid_pairs), len(selected_ids), scene))
         scene_nvalid = {}
         scene_nvalid[scene] = len(valid_pairs)
-        np.save('{:s}_nvalid_sift'.format(scene), scene_nvalid)
+        np.save('{:s}_nvalid_{:s}'.format(scene, self.feature_type), scene_nvalid)
         del all_keypoints
+
+    def write_matches(self, scene_list):
+        # root = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data'
+        # match_dir = osp.join(root, 'matches_20220512_v1')
+        # save_root = osp.join(root, 'matches_20220512_v1_sep')
+
+        root = '/scratches/flyer_2/fx221/dataset/Megadepth/training_data'
+        match_dir = osp.join(root, 'matches_{:s}'.format(self.feature_type))
+        save_root = osp.join(root, 'matches_sep_{:s}'.format(self.feature_type))
+
+        for fn in tqdm(scene_list, total=len(scene_list)):
+            if not osp.isfile(osp.join(match_dir, fn + ".npy")):
+                continue
+            print('Process: ', fn)
+            save_dir = osp.join(save_root, fn.split('.')[0])
+            if osp.exists(save_dir):
+                continue
+
+            data = np.load(osp.join(match_dir, fn + ".npy"), allow_pickle=True)
+
+            if not osp.exists(save_dir):
+                os.makedirs(save_dir)
+            for idx, d in tqdm(enumerate(data), total=len(data)):
+                np.save(osp.join(save_dir, '{:d}'.format(idx)), d)
 
     def extract_image_fns(self):
         for scene in tqdm(self.scenes, total=len(self.scenes)):
@@ -867,227 +434,15 @@ class Megadepth:
         print('Find {:d} images in total'.format(len(self.image_paths)))
 
 
-def test():
-    base_path = '/scratches/flyer_3/fx221/dataset/Megadepth'
-    # feature_type = 'spp'
-
-    base_path1 = '/scratches/flyer_2/fx221/dataset/Megadepth'
-    feature_type = 'sift'
-    match_dir = osp.join(base_path1, 'training_data', 'matches_20220512_v1')
-    keypoint_dir = osp.join(base_path1, 'training_data', 'keypoints_sift')
-    scene = '5018'
-    matches = np.load(osp.join(match_dir, scene + ".npy"), allow_pickle=True)
-
-    cv2.namedWindow('img', cv2.WINDOW_NORMAL)
-    nvalid = 0
-    visited_samples = []
-    b = []
-    for m in matches:
-        img_path1 = m['image_path1']
-        img_path2 = m['image_path2']
-        # gt_matches = m['matches']
-        if img_path1 == img_path2:
-            continue
-        if img_path1 + img_path2 in visited_samples:
-            continue
-        visited_samples.append(img_path1 + img_path2)
-        visited_samples.append(img_path2 + img_path1)
-
-        matched_ids1 = m['matched_ids1']
-        matched_ids2 = m['matched_ids2']
-        print(np.unique(matched_ids1).shape[0], matched_ids1.shape[0], np.unique(matched_ids2).shape,
-              matched_ids2.shape)
-        # if len(matched_ids1) < 50:
-        #     continue
-        #
-        # n = m
-        # n['matched_ids1'] = np.array(m['matched_ids1'], dtype=int)
-        # n['matched_ids2'] = np.array(m['matched_ids2'], dtype=int)
-        # n['umatched_ids1'] = np.array(m['umatched_ids1'], dtype=int)
-        # n['umatched_ids2'] = np.array(m['umatched_ids2'], dtype=int)
-        # b.append(n)
-
-        nvalid = nvalid + 1
-        # continue
-
-        gt_matches = np.array([matched_ids1, matched_ids2]).transpose()
-        print(len(matched_ids1), gt_matches.shape)
-
-        feat1 = np.load(osp.join(keypoint_dir, scene, img_path1.split('/')[-1] + "_{:s}.npy".format(feature_type)),
-                        allow_pickle=True).item()
-        feat2 = np.load(osp.join(keypoint_dir, scene, img_path2.split('/')[-1] + "_{:s}.npy".format(feature_type)),
-                        allow_pickle=True).item()
-        kpt1 = feat1['keypoints']
-        kpt2 = feat2['keypoints']
-
-        # gt_matches = m['matches']
-
-        img1 = cv2.imread(osp.join(base_path, img_path1))
-        img2 = cv2.imread(osp.join(base_path, img_path2))
-
-        img_match = plot_matches_cv2(image0=img1, image1=img2, kpts0=kpt1, kpts1=kpt2, matches=gt_matches)
-        cv2.imshow('img', img_match)
-        key = cv2.waitKey()
-        if key in (27, ord('q')):
-            cv2.destroyAllWindows()
-            exit(0)
-
-    # print('valid: ', nvalid, len(matches))
-    # np.save('b', b)
-
-
-def write_keypoints_to_file(scene_list=[]):
-    root = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data'
-    kpt_dir = osp.join(root, 'keypoints')
-    save_file = osp.join(root, 'keypoint_spp.h5')
-
-    hf5_f = h5py.File(save_file, 'a')
-    for scene in tqdm(scene_list, total=len(scene_list)):
-        if not osp.isdir(osp.join(kpt_dir, scene)):
-            continue
-        print('Process scene: ', scene)
-        kpt_fns = os.listdir(osp.join(kpt_dir, scene))
-        kpt_fns = sorted(kpt_fns)
-        for fn in tqdm(kpt_fns, total=len(kpt_fns)):
-            kpt = np.load(osp.join(kpt_dir, scene, fn), allow_pickle=True).item()
-            grp = hf5_f.create_group(scene + "/" + fn.split('.')[0])
-            for k in kpt:
-                grp.create_dataset(k, data=kpt[k])
-
-
-def write_matches_to_file(scene_list, bin=20):
-    # root = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data'
-    # match_dir = osp.join(root, 'matches_20220512_v1')
-    # save_root = osp.join(root, 'matches_20220512_v1_sep')
-
-    root = '/scratches/flyer_2/fx221/dataset/Megadepth/training_data'
-    match_dir = osp.join(root, 'matches_20220512_v1_sift')
-    save_root = osp.join(root, 'matches_20220512_v1_sep_sift')
-
-    # hf5_f = h5py.File(save_file, 'a')
-    # scene_list = sorted(os.listdir(match_dir))[s:s + bin]
-    for fn in tqdm(scene_list, total=len(scene_list)):
-        if not osp.isfile(osp.join(match_dir, fn + ".npy")):
-            continue
-        print('Process: ', fn)
-        save_dir = osp.join(save_root, fn.split('.')[0])
-        if osp.exists(save_dir):
-            continue
-
-        data = np.load(osp.join(match_dir, fn + ".npy"), allow_pickle=True)
-
-        if not osp.exists(save_dir):
-            os.makedirs(save_dir)
-        for idx, d in tqdm(enumerate(data), total=len(data)):
-            np.save(osp.join(save_dir, '{:d}'.format(idx)), d)
-            # exit(0)
-            # grp = hf5_f.create_group(fn.split('.')[0] + "/" + d['image_path1'] + "/" + d['image_path2'])
-            # grp = hf5_f.create_group(fn.split('.')[0] + "/" + str(idx))
-            # for k in d.keys():
-            #     grp.create_dataset(k, data=d[k])
-        # exit(0)
-
-
-def write_matches_to_file_v2(test_scene, bin=20):
-    root = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data'
-    match_dir = osp.join(root, 'matches_20220506_v2')
-    save_root = osp.join(root, 'matches_v2')
-
-    all_files = os.listdir(match_dir)
-
-    scene_nvalid = {}
-    scene_list = [test_scene]
-
-    visited_samples = []
-    for scene in tqdm(scene_list, total=len(scene_list)):
-        print('Process scene ', scene)
-
-        scene_files = [v for v in all_files if v.find(scene) >= 0]
-        scene_files = sorted(scene_files)
-
-        save_dir = osp.join(save_root, scene)
-        if not osp.exists(save_dir):
-            os.makedirs(save_dir)
-
-        nvalid = 0
-        for fn in tqdm(scene_files, total=len(scene_files)):
-            data = np.load(osp.join(match_dir, fn), allow_pickle=True)
-            for d in tqdm(data, total=len(data)):
-                if len(d['matched_ids1']) < 50:
-                    continue
-                image_path1 = d['image_path1']
-                image_path2 = d['image_path1']
-                if image_path1 == image_path2:
-                    continue
-                image_path = image_path1 + image_path2
-                if image_path in visited_samples:
-                    continue
-
-                visited_samples.append(image_path1 + image_path2)
-                visited_samples.append(image_path2 + image_path1)
-
-                np.save(osp.join(save_dir, '{:d}'.format(nvalid)), d)
-                nvalid = nvalid + 1
-
-        scene_nvalid[scene.split('.')[0]] = nvalid
-        np.save('{:s}_nvalid'.format(scene), scene_nvalid)
-
-
 if __name__ == '__main__':
-
-    # test()
-    # exit(0)
-
-    # write_matches_to_file(s=180, bin=20)
-
-    # torch.multiprocessing.set_start_method('spawn')
-    #
-    # test()
-    # exit(0)
+    feat_type = 'spp'  # 'sift'
     base_path = '/scratches/flyer_3/fx221/dataset/Megadepth'
-    # base_path = '/scratches/flyer_3/fx221/dataset/Megadepth'
-    # base_path = '/data/cornucopia/fx221/dataset/Megadepth'
-    # scene_list_fn = '/home/mifs/fx221/Research/Code/pnba/assets/megadepth_train_scenes.txt'
-    # scene_list_fn = '/home/mifs/fx221/Research/Code/pnba/assets/megadepth_validation_scenes.txt'
-    # scene_list_fn = '/home/mifs/fx221/Research/Code/pnba/assets/megadepth_test_scenes.txt'
-    scene_list_fn = '/home/mifs/fx221/Research/Code/pnba/assets/megadepth_scenes_full.txt'
-    # scene_list_fn = '/home/mifs/fx221/Research/Code/pnba/tmp/mega_less_200M.txt'  # 148 - 6gpu
-    # scene_list_fn = '/home/mifs/fx221/Research/Code/pnba/tmp/mega_200_500M.txt'  # 34 - 5gpu
-    # scene_list_fn = '/home/mifs/fx221/Research/Code/pnba/tmp/mega_over_500M.txt'  # 10 - 5gpu
-
+    scene_list_fn = '/home/mifs/fx221/Research/Code/imp/assets/megadepth_scenes_full.txt'
     scenes = []
     with open(scene_list_fn, 'r') as f:
         lines = f.readlines()
         for l in lines:
             scenes.append(l.strip())
-
-    # scene_nmatches = {}
-    # for scene in scenes:
-    #     fn = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data/matches_i3o5/{:s}.npy'.format(scene)
-    #     if osp.isfile(fn):
-    #         matches = np.load(fn, allow_pickle=True)
-    #         scene_nmatches[scene] = len(matches)
-    #         print(scene, len(matches), len(scenes))
-
-    # np.save('scene_nmatches', scene_nmatches)
-    # exit(0)
-
-    # ignore = ['0011', '0012', '0013', '0022', '0023', '0032', '0035', '0092', '0104', '0115', '0147', '0176', '0209',
-    #           '0235', '0323', '0411', '0493', '0494', '0496', '4541']
-    # sel_scenes = [s for s in scenes if s not in ignore]
-    # print('sel: ', sel_scenes)
-
-    mega_nvalid = {}
-    all_fns = os.listdir('mega_nvalid_sift')
-    for fn in all_fns:
-        d = np.load(osp.join('mega_nvalid_sift', fn), allow_pickle=True).item()
-        mega_nvalid = {**mega_nvalid, **d}
-
-    np.save('mega_nvalid_20220512_v1_sift', mega_nvalid)
-    exit(0)
-    # print(scenes)
-    # print(len(scenes))
-    # exit(0)
 
     scene_info_path = osp.join(base_path, 'scene_info')
     mega = Megadepth(scene_info_path=scene_info_path,
@@ -1095,58 +450,14 @@ if __name__ == '__main__':
                      scene_list_fn=scene_list_fn,
                      nfeatures=4096,
                      # feature_type='sift',
-                     feature_type='spp',
+                     feature_type=feat_type,
                      # feature_type=None,
-                     extract_features=False,
-                     # extract_features=True,
+                     # extract_features=False,
+                     extract_features=True,
                      inlier_th=3,
+                     min_overlap_ratio=0.1,
+                     max_overlap_ratio=0.8,
                      )
-
-    large_scenes = ['0000', '0002', '0003', '0004', '0008', '0032', '0042', '0080', '0331', '0407']
-    small_scenes = [v for v in scenes if v not in large_scenes]
-    # scenes = ['0000']
-    # scenes = large_scenes
-    # scenes = scenes[0:3]
-    # scenes = scenes[3:6]
-    # scenes = scenes[6:]
-    scenes = small_scenes
-    # scenes = scenes[0:30]
-    # scenes = scenes[30:60]
-    # scenes = scenes[60:90]
-    # scenes = scenes[90:120]
-    # scenes = scenes[120:]
-    # scenes = scenes[20:40]
-    # scenes = scenes[40:60]
-    # scenes = scenes[60:80]
-    # scenes = scenes[80:100]
-    # scenes = scenes[100:120]
-    # scenes = scenes[120:140]
-    # scenes = scenes[140:]
-    # scenes = scenes[135:]
-    write_matches_to_file(scene_list=scenes, bin=20)
-    exit(0)
-
-    # for s in scenes:
-    #     print(s)
-    #     exit(0)
-    # mega.build_correspondence_v2(scene=s,
-    #                              save_dir='/scratches/flyer_3/fx221/dataset/Megadepth/training_data',
-    #                              pre_load=True,
-    #                              show_match=False)
-    # exit(0)
-    #
-    # for s in ['5018']:
-    # scenes = large_scenes
-    scenes = small_scenes
-    for s in scenes:
-        print(s)
-        # exit(0)
-        mega.build_correspondence_v3(scene=s,
-                                     feature_type='sift',
-                                     save_dir='/scratches/flyer_2/fx221/dataset/Megadepth/training_data',
-                                     pre_load=True,
-                                     show_match=False)
-    exit(0)
 
     loader = torch.utils.data.DataLoader(dataset=mega,
                                          num_workers=8,
@@ -1155,9 +466,10 @@ if __name__ == '__main__':
                                          pin_memory=True,
                                          )
 
-    # save_dir = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data/keypoints'
-    save_dir = '/scratches/flyer_2/fx221/dataset/Megadepth/training_data/keypoints_sift'
+    save_dir = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data'
+    save_dir_keypoint = osp.join(save_dir, 'keypoints_{:s}'.format(feat_type))
 
+    print('Start extracting keypoints...')
     for bid, data in tqdm(enumerate(loader), total=len(loader)):
         image_path = data['image_path'][0]
         depth_path = data['depth_path'][0]
@@ -1173,11 +485,9 @@ if __name__ == '__main__':
         scene = image_paths[1]
         img_fn = image_paths[-1]
 
-        if not osp.exists(osp.join(save_dir, scene)):
-            os.makedirs(osp.join(save_dir, scene))
-
-        # save_fn = osp.join(save_dir, scene, img_fn + '_spp')
-        save_fn = osp.join(save_dir, scene, img_fn + '_sift')
+        if not osp.exists(osp.join(save_dir_keypoint, scene)):
+            os.makedirs(osp.join(save_dir_keypoint, scene))
+        save_fn = osp.join(save_dir_keypoint, scene, img_fn + '_{:s}'.format(feat_type))
         save_data = {
             'image_path': image_path,
             'depth_path': depth_path,
@@ -1191,7 +501,17 @@ if __name__ == '__main__':
         }
         np.save(save_fn, save_data)
 
-        # print(image_path, depth_path)
-        # print(keypoints.shape, scores.shape, descriptors.shape, depth.shape, pose.shape, intrinsics.shape)
-        # print(image_size)
-        # exit(0)
+    print('Finish extracting keypoints...')
+
+    print('Start building correspondences...')
+    scene_npairs = []
+    for s in scenes:
+        s_pairs = mega.build_correspondence(scene=s, save_dir=save_dir)
+        mega.write_matches(scene_list=[s])
+
+    # merge scene-pairs to a single file
+    mega_scene_pairs = {}
+    for d in scene_npairs:
+        mega_scene_pairs = {**mega_scene_pairs, **d}
+    np.save('asserts/mega_nvalid_{:s}'.format(feat_type), mega_scene_pairs)
+    print('Finish building correspondences...')
