@@ -1,0 +1,13 @@
+.idea
+__pycache__
+nets/__pycache__
+dataset/__pycache__
+*.log
+log_*
+weights/*
+prepare_*
+samples/*
+tmp/*.txt
+build_matches_*
+mega_nvalid
+mega_nvalid_sift
