@@ -1,0 +1,22 @@
+reader:
+  name: standard
+  rawdata_dir: /scratches/flyer_3/fx221/dataset/scannet_eval_release/data
+  dataset_dir: /scratches/flyer_3/fx221/dataset/scannet_eval_release/eval/scannet_root_2000.hdf5
+  num_kpt: 2000
+
+matcher:
+  name: GM
+  model_dir: ../weights/gm/sp
+  net_channels: 128
+  layer_num: 9
+  head: 4
+  use_score_encoding: True
+  sink_iter: [20]
+  p_th: 0.2
+
+evaluator:
+  name: AUC
+  rescale: 640
+  num_pair: 1500
+  inlier_th: 0.005
+
