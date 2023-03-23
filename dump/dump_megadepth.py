@@ -87,15 +87,12 @@ class Megadepth:
                 spp_config = {
                     'descriptor_dim': 256,
                     'nms_radius': 3,
-                    # 'keypoint_threshold': 0.00001,
-                    # 'keypoint_threshold': 0.00025,
                     'keypoint_threshold': 0.005,
-                    'max_keypoints': self.nfeatures * 4,
+                    'max_keypoints': self.nfeatures,
                     'remove_borders': 4,
                     'weight_path': '/home/mifs/fx221/Research/Code/pnba/weights/superpoint_v1.pth',
                     'with_compensate': True,
                 }
-                # spp_config['max_keypoints'] = int(1.5 * self.nfeatures)
                 self.spp = SuperPoint(config=spp_config).eval().cuda()
 
         self.image_paths = []
@@ -232,6 +229,7 @@ class Megadepth:
 
         if show_match:
             cv2.namedWindow('img', cv2.WINDOW_NORMAL)
+
         for pair_idx in tqdm(selected_ids, total=len(selected_ids)):
             idx1 = pairs[0, pair_idx]
             idx2 = pairs[1, pair_idx]
@@ -369,38 +367,32 @@ class Megadepth:
 
         if len(valid_pairs) > 0:
             np.save(osp.join(match_dir, scene), valid_pairs)
-            # os.makedirs(match_dir, exist_ok=True)
-            # for ni, p in enumerate(valid_pairs):
-            #     np.save(osp.join(match_dir, '{:d}'.format(ni)), p)
         print('Find {:d}/{:d} valid pairs from scene {:s}'.format(len(valid_pairs), len(selected_ids), scene))
         scene_nvalid = {}
         scene_nvalid[scene] = len(valid_pairs)
         np.save('{:s}_nvalid_{:s}'.format(scene, self.feature_type), scene_nvalid)
         del all_keypoints
 
-    def write_matches(self, scene_list):
+    def write_matches(self, save_dir, scene_list):
         # root = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data'
         # match_dir = osp.join(root, 'matches_20220512_v1')
         # save_root = osp.join(root, 'matches_20220512_v1_sep')
 
-        root = '/scratches/flyer_2/fx221/dataset/Megadepth/training_data'
-        match_dir = osp.join(root, 'matches_{:s}'.format(self.feature_type))
-        save_root = osp.join(root, 'matches_sep_{:s}'.format(self.feature_type))
+        # root = '/scratches/flyer_2/fx221/dataset/Megadepth/training_data'
+        match_dir = osp.join(save_dir, 'matches_{:s}'.format(self.feature_type))
+        save_root = osp.join(save_dir, 'matches_sep_{:s}'.format(self.feature_type))
 
         for fn in tqdm(scene_list, total=len(scene_list)):
             if not osp.isfile(osp.join(match_dir, fn + ".npy")):
                 continue
             print('Process: ', fn)
-            save_dir = osp.join(save_root, fn.split('.')[0])
-            if osp.exists(save_dir):
-                continue
-
             data = np.load(osp.join(match_dir, fn + ".npy"), allow_pickle=True)
 
-            if not osp.exists(save_dir):
-                os.makedirs(save_dir)
+            save_dir_scene = osp.join(save_root, fn.split('.')[0])
+            if not osp.exists(save_dir_scene):
+                os.makedirs(save_dir_scene)
             for idx, d in tqdm(enumerate(data), total=len(data)):
-                np.save(osp.join(save_dir, '{:d}'.format(idx)), d)
+                np.save(osp.join(save_dir_scene, '{:d}'.format(idx)), d)
 
     def extract_image_fns(self):
         for scene in tqdm(self.scenes, total=len(self.scenes)):
@@ -437,7 +429,8 @@ class Megadepth:
 if __name__ == '__main__':
     feat_type = 'spp'  # 'sift'
     base_path = '/scratches/flyer_3/fx221/dataset/Megadepth'
-    scene_list_fn = '/home/mifs/fx221/Research/Code/imp/assets/megadepth_scenes_full.txt'
+    scene_list_fn = 'assets/megadepth_scenes_full.txt'
+
     scenes = []
     with open(scene_list_fn, 'r') as f:
         lines = f.readlines()
@@ -454,7 +447,7 @@ if __name__ == '__main__':
                      # feature_type=None,
                      # extract_features=False,
                      extract_features=True,
-                     inlier_th=3,
+                     inlier_th=5,
                      min_overlap_ratio=0.1,
                      max_overlap_ratio=0.8,
                      )
@@ -487,6 +480,7 @@ if __name__ == '__main__':
 
         if not osp.exists(osp.join(save_dir_keypoint, scene)):
             os.makedirs(osp.join(save_dir_keypoint, scene))
+
         save_fn = osp.join(save_dir_keypoint, scene, img_fn + '_{:s}'.format(feat_type))
         save_data = {
             'image_path': image_path,
@@ -514,4 +508,5 @@ if __name__ == '__main__':
     for d in scene_npairs:
         mega_scene_pairs = {**mega_scene_pairs, **d}
     np.save('asserts/mega_nvalid_{:s}'.format(feat_type), mega_scene_pairs)
+    
     print('Finish building correspondences...')
