@@ -33,11 +33,9 @@ import torch.distributed as dist
 torch.set_grad_enabled(True)
 
 parser = argparse.ArgumentParser(description='Superglue', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--vis', action='store_true', help='visualization of matches')
 parser.add_argument('--eval', action='store_true', help='evaluation')
 parser.add_argument('--max_keypoints', type=int, default=512, help='the maximum number of keypoints')
 parser.add_argument('--keypoint_th', type=float, default=0.005, help='threshold of superpoint detector')
-parser.add_argument('-nms_radius', type=int, default=3, help='nms radius')
 parser.add_argument('--sinkhorn_iterations', type=int, default=20,
                     help='the number of Sinkhorn iterations in Superglue')
 parser.add_argument('--match_th', type=float, default=0.2, help='Superglue matching threshold')
@@ -45,17 +43,15 @@ parser.add_argument('--lr', type=float, default=0.0001, help='initial learning r
 parser.add_argument("--weight_decay", type=float, default=5e-4)
 parser.add_argument('--epochs', type=int, default=20)
 parser.add_argument('--batch_size', type=int, default=2)
-parser.add_argument('--dataset', type=str, default='mscoco', choices={'mscoco', 'megadepth'})
 parser.add_argument('--feature', choices={'sift', 'spp'}, default='spp', help='features used for training')
 parser.add_argument("--gpu", type=int, nargs='+', default=[0], help='-1 for CPU')
 parser.add_argument("--its_per_epoch", type=int, default=-1)
 parser.add_argument("--log_intervals", type=int, default=50)
 parser.add_argument("--workers", type=int, default=4)
 parser.add_argument("--local_rank", type=int, default=0)
-parser.add_argument('--save_root', type=str, default='/scratches/flyer_3/fx221/exp/pnba')
-parser.add_argument('--data_root', type=str, default='/scratches/flyer_2/fx221/superglue/train2014')
-parser.add_argument('--superglue', choices={'indoor', 'outdoor'}, default='indoor', help='SuperGlue weights')
-parser.add_argument('--network', type=str, default='superglue', help='SuperGlue weights')
+parser.add_argument('--save_path', type=str, default='/scratches/flyer_3/fx221/exp/imp')
+parser.add_argument('--base_path', type=str, default='/scratches/flyer_3/fx221/dataset/Megadepth')
+parser.add_argument('--network', type=str, default='gm')
 parser.add_argument('--config', type=str, required=True, help='config of specifications')
 parser.add_argument('--eval_config', type=str, default=None, help='config of specifications')
 
@@ -70,29 +66,26 @@ def setup(rank, world_size):
 def train_DDP(rank, world_size, model, args):
     print('In train_DDP..., rank: ', rank)
     torch.cuda.set_device(rank)
-
-    if args.dataset == 'megadepth':
-        train_set = Megadepth(
-            scene_info_path=osp.join(args.data_root, args.scene_info_path),
-            base_path=osp.join(args.data_root, args.base_path),
-            scene_list_fn=args.scene_list_fn,
-            min_overlap_ratio=args.min_overlap_ratio,
-            max_overlap_ratio=args.max_overlap_ratio,
-            pairs_per_scene=args.pairs_per_scene,
-            image_size=args.image_size,
-            nfeatures=args.max_keypoints,
-            train=(args.train > 0),
-            inlier_th=args.inlier_th,
-            feature_type=args.feature,
-            pre_load_scene_info=(args.pre_load > 0),
-            extract_feature=False,
-            min_inliers=args.min_inliers,
-            max_inliers=args.max_inliers,
-            random_inliers=(args.random_inliers > 0),
-            # tmp_dir='/scratches/flyer_3/fx221/exp/pnba/megadepth_spp',
-            matches={},
-            rank=rank,
-        )
+    train_set = Megadepth(
+        scene_info_path=osp.join(args.data_path, 'scene_info'),
+        base_path=args.base_path,
+        scene_list_fn=args.scene_list_fn,
+        min_overlap_ratio=args.min_overlap_ratio,
+        max_overlap_ratio=args.max_overlap_ratio,
+        pairs_per_scene=args.pairs_per_scene,
+        image_size=args.image_size,
+        nfeatures=args.max_keypoints,
+        train=(args.train > 0),
+        inlier_th=args.inlier_th,
+        feature_type=args.feature,
+        pre_load_scene_info=(args.pre_load > 0),
+        extract_feature=False,
+        min_inliers=args.min_inliers,
+        max_inliers=args.max_inliers,
+        random_inliers=(args.random_inliers > 0),
+        matches={},
+        rank=rank,
+    )
     device = torch.device(f'cuda:{rank}')
     model.to(device)
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -118,8 +111,6 @@ if __name__ == '__main__':
         args = parser.parse_args(namespace=t_args)
 
     torch_set_gpu(gpus=args.gpu)
-    # args.save_root = osp.join(args.data_root, args.save_root)
-    args.save_root = osp.join('/scratches/flyer_3', args.save_root)
     if args.local_rank == 0:
         print(args)
 
@@ -157,6 +148,8 @@ if __name__ == '__main__':
         model = GM(config.get('matcher', {}))
     elif args.network == 'dgnns':
         model = DGNNS(config.get('matcher', {}))
+    elif args.network == 'adagmn':
+        model = AdaGMN(config.get('matcher', {}))
 
     if args.local_rank == 0:
         print('model: ', model)
@@ -171,46 +164,4 @@ if __name__ == '__main__':
                                   strict=True)
             print('Load resume weight from {:s}'.format(osp.join(args.save_root, args.resume_path)))
 
-    if args.with_dist < 1:
-        if args.dataset == 'megadepth':
-            base_path = '/scratch/fx221/dataset/Megadepth'
-            scenes = []
-            with open(args.scene_list_fn, 'r') as f:
-                lines = f.readlines()
-                for l in lines:
-                    scenes.append(l.strip())
-            matches = read_matches(scenes=scenes, base_path=base_path)
-
-            train_set = Megadepth(
-                scene_info_path=osp.join(args.data_root, args.scene_info_path),
-                base_path=osp.join(args.data_root, args.base_path),
-                scene_list_fn=args.scene_list_fn,
-                min_overlap_ratio=args.min_overlap_ratio,
-                max_overlap_ratio=args.max_overlap_ratio,
-                pairs_per_scene=args.pairs_per_scene,
-                image_size=args.image_size,
-                nfeatures=args.max_keypoints,
-                train=(args.train > 0),
-                inlier_th=args.inlier_th,
-                feature_type=args.feature,
-                pre_load_scene_info=(args.pre_load > 0),
-                extract_feature=False,
-                min_inliers=args.min_inliers,
-                max_inliers=args.max_inliers,
-                random_inliers=(args.random_inliers > 0),
-                # tmp_dir='/scratches/flyer_3/fx221/exp/pnba/megadepth_spp',
-                local_rank=args.local_rank,
-                matches=matches,
-            )
-            eval_set = None
-
-        train_loader = Data.DataLoader(dataset=train_set,
-                                       shuffle=False,
-                                       batch_size=args.batch_size,
-                                       drop_last=True,
-                                       num_workers=args.workers)
-        model = model.cuda()
-        trainer = Trainer(model=model, train_loader=train_loader, eval_loader=None, args=args)
-        trainer.train()
-    else:
-        mp.spawn(train_DDP, nprocs=len(args.gpu), args=(len(args.gpu), model, args), join=True)
+    mp.spawn(train_DDP, nprocs=len(args.gpu), args=(len(args.gpu), model, args), join=True)

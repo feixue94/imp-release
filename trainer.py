@@ -21,8 +21,6 @@ import torch
 from torch.autograd import Variable
 from tools.common import save_args
 from tools.utils import plot_matches_cv2, eval_matches
-
-from nets.matcher import mutual_nn_matcher
 from eval.eval_yfcc_full import evaluate_full
 
 
@@ -60,14 +58,11 @@ class Trainer:
             now = datetime.datetime.now()
             log_dir = now.strftime("%Y_%m_%d_%H_%M_%S")
             log_dir = log_dir + '_' + self.args.network + '_L' + str(
-                self.args.layers) + '_' + self.args.dataset + '_' + str(self.args.feature) + '_B' + str(
+                self.args.layers) + '_' + str(self.args.feature) + '_B' + str(
                 self.args.batch_size) + '_K' + str(self.args.max_keypoints) + '_M' + str(
                 self.args.match_th) + '_' + self.args.ac_fn + '_' + self.args.norm_fn + '_' + self.args.optim
 
-            if self.args.with_pose > 0:
-                log_dir = log_dir + "_P{:d}".format(self.args.n_hypothesis)
-
-        self.save_dir = osp.join(self.args.save_root, log_dir)
+        self.save_dir = osp.join(self.args.save_path, log_dir)
         if not osp.exists(self.save_dir):
             os.makedirs(self.save_dir, exist_ok=True)
 
@@ -81,18 +76,8 @@ class Trainer:
         self.tag = log_dir
 
         self.do_eval = (self.args.do_eval > 0)
-        self.do_vis = self.args.vis
-
         if self.do_eval:
             self.eval_fun = self.eval_matching
-
-        if self.do_vis and self.args.local_rank == 0:
-            self.vis_dir = osp.join(self.save_dir, 'vis')
-            if not osp.exists(self.vis_dir):
-                os.makedirs(self.vis_dir)
-            if self.do_eval:
-                if not osp.exists(osp.join(self.vis_dir, 'eval')):
-                    os.makedirs(osp.join(self.vis_dir, 'eval'))
 
     def process_epoch(self):
         self.model.train()
@@ -103,8 +88,6 @@ class Trainer:
         epoch_acc_corr_ratio = []
         epoch_acc_incorr_ratio = []
         epoch_matching_loss = []
-        epoch_pose_loss = []
-        epoch_valid_pose = []
 
         n_invalid_its = 0
         for bidx, pred in tqdm(enumerate(self.train_loader), total=len(self.train_loader)):
@@ -116,42 +99,24 @@ class Trainer:
                         pred[k] = Variable(pred[k].float().cuda())
                     else:
                         pred[k] = Variable(torch.stack(pred[k]).float().cuda())
-                # if k in ('image0_shape', 'image1_shape'):
-                #     pred[k] = Variable(torch.stack(pred[k]).float().cuda())
 
             if self.args.its_per_epoch >= 0 and bidx >= self.args.its_per_epoch:
                 break
 
-            # my_context = self.model.no_sync if ar
             data = self.model(pred)
             for k, v in pred.items():
                 pred[k] = v
             pred = {**pred, **data}
 
             loss = pred['loss']
-            # loss_corr = pred['loss_corr']
-            # loss_incorr = pred['loss_incorr']
             acc_corr = pred['acc_corr'][-1]
             acc_incorr = pred['acc_incorr'][-1]
             total_acc_corr = pred['total_acc_corr'][-1]
             total_acc_incorr = pred['total_acc_incorr'][-1]
-            # print(loss, acc_corr, acc_incorr)
-            # print('loss: ', loss, torch.numel(loss))
-
             if 'matching_loss' in pred.keys():
                 matching_loss = pred['matching_loss']
             else:
                 matching_loss = loss
-
-            if 'pose_loss' in pred.keys():
-                pose_loss = pred['pose_loss']
-            else:
-                pose_loss = loss
-
-            if 'valid_pose' in pred.keys():
-                valid_pose = pred['valid_pose']
-            else:
-                valid_pose = loss
 
             if torch.numel(loss) > 1:
                 loss = torch.mean(loss)
@@ -172,11 +137,6 @@ class Trainer:
                     continue
 
                 matching_loss = torch.mean(matching_loss)
-                pose_loss = torch.mean(pose_loss)
-                valid_pose = torch.mean(valid_pose)
-
-                # loss_corr = torch.mean(loss_corr)
-                # loss_incorr = torch.mean(loss_incorr)
                 acc_corr = torch.mean(acc_corr)
                 acc_incorr = torch.mean(acc_incorr)
                 total_acc_corr = torch.mean(total_acc_corr)
@@ -198,8 +158,6 @@ class Trainer:
 
             epoch_losses.append(loss.item())
             epoch_matching_loss.append(matching_loss.item())
-            epoch_pose_loss.append(pose_loss.item())
-            epoch_valid_pose.append(valid_pose.item())
 
             epoch_acc_corr.append(acc_corr.item())
             epoch_acc_incorr.append(acc_incorr.item())
@@ -222,202 +180,58 @@ class Trainer:
 
             if self.args.local_rank == 0 and bidx % self.args.log_intervals == 0:
                 matching_score = pred['matching_scores0'][-1]
-                # mean_matching_score = torch.mean(matching_score)
-                # medien_matching_score = torch.median(matching_score)
-                print_text = 'Epoch [{:d}/{:d}], Step [{:d}/{:d}/{:d}], Loss [m{:.2f}/p{:.2f}/t{:.2f}], MS [{:.2f}], Acc [c{:.1f}/{:.1f}, n{:.1f}/{:.1f}], P[{:.1f}]'.format(
+                print_text = 'Epoch [{:d}/{:d}], Step [{:d}/{:d}/{:d}], Loss [m{:.2f}//t{:.2f}], MS [{:.2f}], Acc [c{:.1f}/{:.1f}, n{:.1f}/{:.1f}]'.format(
                     self.epoch,
                     self.num_epochs, bidx,
                     len(self.train_loader),
                     self.iteration,
                     matching_loss.item(),
-                    pose_loss.item(),
                     loss.item(),
                     torch.max(matching_score).item(),
                     np.mean(epoch_acc_corr),
                     np.mean(epoch_acc_corr_ratio),
                     np.mean(epoch_acc_incorr),
                     np.mean(epoch_acc_incorr_ratio),
-                    np.mean(epoch_valid_pose))
+                )
                 print(print_text)
                 self.log_file.write(print_text + '\n')
 
                 info = {
                     'lr': lr,
                     'matching_loss': matching_loss.item(),
-                    'pose_loss': pose_loss.item(),
                     'loss': loss.item(),
                     'acc_corr': acc_corr.item(),
                     'acc_incorr': acc_incorr.item(),
                     'acc_corr_ratio': acc_corr_ratio,
                     'acc_incorr_ratio': acc_incorr_ratio,
-                    'valid_pose': valid_pose.item(),
                 }
                 for k, v in info.items():
                     self.writer.add_scalar(tag=k, scalar_value=v, global_step=self.iteration)
 
-                if self.do_vis:
-                    image0, image1 = pred['image0'].cpu().numpy()[0], pred['image1'].cpu().numpy()[0]
-                    if image0.shape[0] == 1:
-                        image0 = image0[0]
-                    if image1.shape[0] == 1:
-                        image1 = image1[0]
-
-                    image0 = image0.astype('float32')
-                    image1 = image1.astype('float32')
-                    if len(image0.shape) == 2:
-                        image0 = cv2.cvtColor(image0, cv2.COLOR_GRAY2BGR)
-                        image1 = cv2.cvtColor(image1, cv2.COLOR_GRAY2BGR)
-
-                    kpts0, kpts1 = pred['keypoints0'].cpu().numpy()[0], pred['keypoints1'].cpu().numpy()[0]
-                    matches = pred['matches0'].cpu().detach().numpy()[0]
-                    conf = pred['matching_scores0'].cpu().detach().numpy()[0]
-                    matching_mask = pred['matching_mask'][0].cpu().detach().numpy().astype(int)  # [N, M]
-                    gt_matches = np.zeros_like(matches) - 1
-                    for p0 in range(kpts0.shape[0]):
-                        p1 = np.where(matching_mask[p0] == 1)[0]
-                        if p1 >= kpts1.shape[0]:
-                            continue
-                        gt_matches[p0] = p1
-                    eval_out = plot_matches_cv2(image0=image0, image1=image1,
-                                                kpts0=kpts0, kpts1=kpts1,
-                                                pred_matches=matches,
-                                                gt_matches=gt_matches,
-                                                save_fn=osp.join(self.vis_dir,
-                                                                 '{:d}_{:d}_cv.png'.format(self.epoch, bidx))
-                                                )
-
-                    desc0 = pred['descriptors0'][0]
-                    desc1 = pred['descriptors1'][0]
-                    nnm_matches = mutual_nn_matcher(descriptors1=desc0, descriptors2=desc1)
-                    nnm_out = eval_matches(pred_matches=nnm_matches, gt_matches=gt_matches)
-
-                    info = {
-                        'train_inlier_ratio': eval_out['inlier_ratio'],
-                        'train_recall_ratio': eval_out['recall_ratio'],
-                        'nnm_inlier_ratio': nnm_out['inlier_ratio'],
-                        'nnm_recall_ratio': nnm_out['recall_ratio'],
-                        'train-nnm_inlier_ratio': eval_out['inlier_ratio'] - nnm_out['inlier_ratio'],
-                        'train-nnm_recall_ratio': eval_out['recall_ratio'] - nnm_out['recall_ratio'],
-                        'mean_score': np.mean(conf),
-                        'md_score': np.median(conf),
-                    }
-                    for k, v in info.items():
-                        self.writer.add_scalar(tag=k, scalar_value=v, global_step=self.iteration)
-                    self.writer.add_histogram(tag='score', values=matching_score, global_step=self.iteration)
         if self.args.local_rank == 0:
-            print_text = 'Epoch [{:d}/{:d}], AVG Loss [m{:.2f}/p{:.2f}/t{:.2f}], Acc [c{:.1f}/{:.1f}, n{:.1f}/{:.1f}], P [{:.1f}]\n'.format(
+            print_text = 'Epoch [{:d}/{:d}], AVG Loss [m{:.2f}/t{:.2f}], Acc [c{:.1f}/{:.1f}, n{:.1f}/{:.1f}]\n'.format(
                 self.epoch,
                 self.num_epochs,
                 np.mean(epoch_matching_loss),
-                np.mean(epoch_pose_loss),
                 np.mean(epoch_losses),
                 np.mean(epoch_acc_corr),
                 np.mean(epoch_acc_corr_ratio),
                 np.mean(epoch_acc_incorr),
                 np.mean(epoch_acc_incorr_ratio),
-                np.mean(epoch_valid_pose),
             )
             print(print_text)
             self.log_file.write(print_text + '\n')
             self.log_file.flush()
         return np.mean(epoch_losses)
 
-    def eval(self):
-        self.model.eval()
-        print('Start to eval the model from epoch: {:d}'.format(self.epoch))
-
-        mean_inlier_ratio = []
-        mean_corr_matches = []
-        mean_gt_matches = []
-        mean_recall_ratio = []
-        mean_loss = []
-
-        for bidx, pred in tqdm(enumerate(self.eval_loader), total=len(self.eval_loader)):
-            with torch.no_grad():
-                for k in pred:
-                    if k != 'file_name' and k != 'image0' and k != 'image1' and k != 'depth0' and k != 'depth1':
-                        if type(pred[k]) == torch.Tensor:
-                            pred[k] = Variable(pred[k].float().cuda())
-                        else:
-                            pred[k] = Variable(torch.stack(pred[k]).float().cuda())
-
-                data = self.model(pred)
-                for k, v in pred.items():
-                    pred[k] = v
-                pred = {**pred, **data}
-                loss = pred['loss']
-                if torch.numel(loss) > 1:
-                    loss = torch.mean(loss)
-                # print('loss: ', loss, type(loss))
-                if torch.isinf(loss) or torch.isnan(loss):
-                    # self.optimizer.zero_grad()
-                    print('Loss is INF/NAN')
-                    del pred
-                    continue
-
-                mean_loss.append(loss.item())
-                image0, image1 = pred['image0'].cpu().numpy()[0], pred['image1'].cpu().numpy()[0]
-                if image0.shape[0] == 1:
-                    image0 = image0[0]
-                if image1.shape[0] == 1:
-                    image1 = image1[0]
-
-                image0 = image0.astype('float32')
-                image1 = image1.astype('float32')
-                if len(image0.shape) == 2:
-                    image0 = cv2.cvtColor(image0, cv2.COLOR_GRAY2BGR)
-                    image1 = cv2.cvtColor(image1, cv2.COLOR_GRAY2BGR)
-
-                kpts0, kpts1 = pred['keypoints0'].cpu().numpy()[0], pred['keypoints1'].cpu().numpy()[0]
-                matches = pred['matches0'].cpu().detach().numpy()[0]
-                conf = pred['matching_scores0'].cpu().detach().numpy()[0]
-                matching_mask = pred['matching_mask'][0].cpu().detach().numpy().astype(int)  # [N, M]
-                gt_matches = np.zeros_like(matches) - 1
-                for p0 in range(kpts0.shape[0]):
-                    p1 = np.where(matching_mask[p0] == 1)[0]
-                    if p1 >= kpts1.shape[0]:
-                        continue
-                    gt_matches[p0] = p1
-                eval_out = plot_matches_cv2(image0=image0, image1=image1,
-                                            kpts0=kpts0, kpts1=kpts1,
-                                            pred_matches=matches,
-                                            gt_matches=gt_matches,
-                                            save_fn=osp.join(osp.join(self.vis_dir, 'eval'),
-                                                             '{:d}_{:d}_cv.png'.format(self.epoch,
-                                                                                       bidx)) if bidx % self.args.log_intervals == 0 else None
-                                            )
-
-                mean_corr_matches.append(eval_out['n_corr_match'])
-                mean_gt_matches.append(eval_out['n_gt_match'])
-                mean_inlier_ratio.append(eval_out['inlier_ratio'])
-                mean_recall_ratio.append(eval_out['recall_ratio'])
-
-        print_text = 'Eval Epoch: {:d}, Loss: {:.2f}, Inlier_ratio:{:.2f}, Recall_ratio:{:.2f}, ' \
-                     'Pred_inlier:{:f}, Gt_inlier:{:f}'.format(self.epoch,
-                                                               np.mean(mean_loss),
-                                                               np.mean(mean_inlier_ratio),
-                                                               np.mean(mean_recall_ratio),
-                                                               np.mean(mean_corr_matches),
-                                                               np.mean(mean_gt_matches),
-                                                               )
-        print(print_text)
-        self.log_file.write('\n' + print_text + '\n')
-
-        return np.mean(mean_inlier_ratio)
-
     def eval_matching(self, epoch=0):
         self.model.eval()
         with open(self.args.eval_config, 'rt') as f:
-            # t_args.__dict__.update(json.load(f))
-            # opt = eval_parser.parse_args(namespace=t_args)
             opt = json.load(f)
             opt['output_dir'] = osp.join(self.save_dir, 'vis_eval_epoch_{:02d}'.format(epoch))
-            # print(opt)
             opt['feature'] = self.args.feature
 
         with torch.no_grad():
-            # eval_out = evaluate(superglue=self.model, superpoint=None, opt=opt)
-            # eval_out = evaluate_graph_matcher(net=self.model, opt=opt)
             for dataset in ['scannet', 'yfcc']:
                 eval_out = evaluate_full(model=self.model, opt=opt, dataset=dataset, feat_type=self.args.feature)
 
@@ -429,8 +243,6 @@ class Trainer:
                     text = text + " {:s} [{:.2f}]".format(k, eval_out[k])
                 self.log_file.write(text + "\n\n")
                 self.log_file.flush()
-
-                # torch.cuda.empty_cache()
 
         return eval_out['prec']
 
@@ -469,8 +281,6 @@ class Trainer:
                     'epoch': self.epoch,
                     'iteration': self.iteration,
                     'model': self.model.state_dict(),
-                    # 'optimizer': self.optimizer.state_dict(),
-                    # 'scheduler': self.lr_scheduler.state_dict(),
                     'min_loss': min_value,
                 }
                 # for multi-gpu training
@@ -489,8 +299,7 @@ class Trainer:
             # important!!!
             epoch += 1
             # self.lr_scheduler.step()
-            if self.args.dataset in ('megadepth', 'mscoco'):
-                self.train_loader.dataset.build_dataset(seed=self.epoch)
+            self.train_loader.dataset.build_dataset(seed=self.epoch)
 
         if self.args.local_rank == 0:
             self.log_file.close()
