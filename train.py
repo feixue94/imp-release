@@ -67,7 +67,7 @@ def train_DDP(rank, world_size, model, args):
     print('In train_DDP..., rank: ', rank)
     torch.cuda.set_device(rank)
     train_set = Megadepth(
-        scene_info_path=osp.join(args.data_path, 'scene_info'),
+        scene_info_path=osp.join(args.base_path, 'scene_info'),
         base_path=args.base_path,
         scene_list_fn=args.scene_list_fn,
         min_overlap_ratio=args.min_overlap_ratio,
@@ -115,41 +115,35 @@ if __name__ == '__main__':
         print(args)
 
     config = {
-        'superpoint': {
-            'nms_radius': args.nms_radius,
-            'keypoint_threshold': args.keypoint_th,
-            'max_keypoints': args.max_keypoints
-        },
-        'matcher': {
-            'sinkhorn_iterations': args.sinkhorn_iterations,
-            'match_threshold': args.match_th,
-            'descriptor_dim': 256 if args.feature == 'spp' else 128,
-            'GNN_layers': ['self', 'cross'] * args.layers,
-            'n_layers': args.layers,
-            'ac_fn': args.ac_fn,
-            'with_sinkhorn': (args.with_sinkhorn > 0),
+        'sinkhorn_iterations': args.sinkhorn_iterations,
+        'match_threshold': args.match_th,
+        'descriptor_dim': 256 if args.feature == 'spp' else 128,
+        'GNN_layers': ['self', 'cross'] * args.layers,
+        'n_layers': args.layers,
+        'ac_fn': args.ac_fn,
+        'with_sinkhorn': (args.with_sinkhorn > 0),
 
-            # for adaptive pooling
-            'n_min_tokens': args.n_min_tokens,
+        # for adaptive pooling
+        'n_min_tokens': args.n_min_tokens,
 
-            # for pose estimator
-            'with_pose': (args.with_pose > 0),
-            'n_hypothesis': args.n_hypothesis,
-            'error_th': args.error_th,
-            'inlier_th': args.inlier_th,
-            'pose_type': 'H' if args.dataset == 'mscoco' else 'F',
-            'minium_samples': 4 if args.dataset == 'mscoco' else 8,
-        }
+        # for pose estimator
+        # 'with_pose': (args.with_pose > 0),
+        # 'n_hypothesis': args.n_hypothesis,
+        # 'error_th': args.error_th,
+        # 'inlier_th': args.inlier_th,
+        # 'pose_type': 'H' if args.dataset == 'mscoco' else 'F',
+        # 'minium_samples': 4 if args.dataset == 'mscoco' else 8,
+
     }
 
-    if args.network == 'superglue':
-        model = SuperGlue(config.get('matcher', {}))
-    elif args.network == 'gm':
-        model = GM(config.get('matcher', {}))
+    # if args.network == 'superglue':
+    #     model = SuperGlue(config.get('matcher', {}))
+    if args.network == 'gm':
+        model = GM(config)
     elif args.network == 'dgnns':
-        model = DGNNS(config.get('matcher', {}))
+        model = DGNNS(config)
     elif args.network == 'adagmn':
-        model = AdaGMN(config.get('matcher', {}))
+        model = AdaGMN(config)
 
     if args.local_rank == 0:
         print('model: ', model)

@@ -14,13 +14,11 @@ import numpy as np
 from pathlib import Path
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
-import cv2
 import torch.optim as optim
 import shutil
 import torch
 from torch.autograd import Variable
 from tools.common import save_args
-from tools.utils import plot_matches_cv2, eval_matches
 from eval.eval_yfcc_full import evaluate_full
 
 
@@ -145,15 +143,10 @@ class Trainer:
                 if torch.isinf(loss) or torch.isnan(loss):
                     print('Loss is INF/NAN')
                     self.optimizer.zero_grad()
-                    del pred
-                    torch.cuda.empty_cache()
                     # del data
                     n_invalid_its += 1
                     if n_invalid_its >= 10:
                         print('Exit because of INF/NAN in loss')
-                        # exit(0)
-                        torch.cuda.empty_cache()
-                        return None
                     continue
 
             epoch_losses.append(loss.item())

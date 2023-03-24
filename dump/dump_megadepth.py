@@ -382,11 +382,6 @@ class Megadepth:
         del all_keypoints
 
     def write_matches(self, save_dir, scene_list):
-        # root = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data'
-        # match_dir = osp.join(root, 'matches_20220512_v1')
-        # save_root = osp.join(root, 'matches_20220512_v1_sep')
-
-        # root = '/scratches/flyer_2/fx221/dataset/Megadepth/training_data'
         match_dir = osp.join(save_dir, 'matches_{:s}'.format(self.feature_type))
         save_root = osp.join(save_dir, 'matches_sep_{:s}'.format(self.feature_type))
 
@@ -509,7 +504,7 @@ if __name__ == '__main__':
     scene_npairs = []
     for s in scenes:  # you can split it into several slices and do them parallelly
         s_pairs = mega.build_correspondence(scene=s, save_dir=save_path, show_match=False, pre_load=True)
-        mega.write_matches(scene_list=[s])
+        mega.write_matches(save_dir=save_path, scene_list=[s])
 
     # merge scene-pairs to a single file
     mega_scene_pairs = {}

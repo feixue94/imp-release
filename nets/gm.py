@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 
 from nets.layers import KeypointEncoder, normalize_keypoints, sink_algorithm, arange_like, dual_softmax
-from nets.layers import SAGNN
+from nets.layers import SAGNN, AttentionalGNN
 from nets.loss import GraphLoss
 
 
@@ -59,7 +59,7 @@ class GM(nn.Module):
             self.config['descriptor_dim'], self.config['keypoint_encoder'],
             ac_fn=self.config['ac_fn'],
             norm_fn=self.config['norm_fn'])
-        self.gnn = SAGNN(
+        self.gnn = AttentionalGNN(
             feature_dim=self.config['descriptor_dim'],
             layer_names=self.config['GNN_layers'],
             ac_fn=self.config['ac_fn'],
@@ -115,7 +115,7 @@ class GM(nn.Module):
         desc1 = desc1 + enc1
 
         # Multi-layer Transformer network.
-        desc0s, desc1s, all_matches = self.gnn(desc0, desc1)
+        desc0s, desc1s = self.gnn(desc0, desc1)
 
         nI = len(desc0s)
         nB = desc0.shape[0]
@@ -255,11 +255,7 @@ class GM(nn.Module):
                 return self.produce_matches(data=data)
             else:
                 return self.run(data=data)
-        if self.with_pose:
-            # return self.forward_train_with_pose(data=data)
-            return self.forward_train_with_pose_v2(data=data)
-        else:
-            return self.forward_train(data=data)
+        return self.forward_train(data=data)
 
     def forward_one_layer_old(self, desc0, desc1, M0, M1, layer_i):
         return self.gnn.forward_one_layer(desc0=desc0, desc1=desc1, M0=M0, M1=M1, layer_i=layer_i)

@@ -118,10 +118,11 @@ class MultiHeadedAttention(nn.Module):
 
 
 class AttentionalPropagation(nn.Module):
-    def __init__(self, feature_dim: int, num_heads: int):
+    def __init__(self, feature_dim: int, num_heads: int, ac_fn: str = 'relu',
+                 norm_fn: str = 'bn'):
         super().__init__()
         self.attn = MultiHeadedAttention(num_heads, feature_dim)
-        self.mlp = MLP([feature_dim * 2, feature_dim * 2, feature_dim])
+        self.mlp = MLP([feature_dim * 2, feature_dim * 2, feature_dim], ac_fn=ac_fn, norm_fn=norm_fn)
         nn.init.constant_(self.mlp[-1].bias, 0.0)
 
     def forward(self, x, source):
@@ -130,43 +131,33 @@ class AttentionalPropagation(nn.Module):
 
 
 class AttentionalGNN(nn.Module):
-    def __init__(self, feature_dim: int, layer_names: list):
+    def __init__(self, feature_dim: int, layer_names: list, ac_fn: str = 'relu',
+                 norm_fn: str = 'bn'):
         super().__init__()
         self.layers = nn.ModuleList([
             AttentionalPropagation(feature_dim, 4)
             for _ in range(len(layer_names))])
         self.names = layer_names
 
-    def forward(self, desc0, desc1, require_prob=False):
-        probs = {}
+    def forward(self, desc0, desc1):
         desc0s = []
         desc1s = []
 
         for i, (layer, name) in enumerate(zip(self.layers, self.names)):
-            # layer.attn.prob = []
             if name == 'cross':
                 src0, src1 = desc1, desc0
-            else:  # if name == 'self':
+            else:
                 src0, src1 = desc0, desc1
             delta0 = layer(desc0, src0)
-            prob0 = layer.attn.prob
+            # prob0 = layer.attn.prob
             delta1 = layer(desc1, src1)
-            prob1 = layer.attn.prob
+            # prob1 = layer.attn.prob
             desc0, desc1 = (desc0 + delta0), (desc1 + delta1)
 
-            probs[i] = {
-                'name': name,
-                'prob0': prob0,
-                'prob1': prob1,
-            }
             if name == 'cross':
                 desc0s.append(desc0)
                 desc1s.append(desc1)
-
-        if require_prob:
-            return desc0s, desc1s, probs
-        else:
-            return desc0s, desc1s
+        return desc0s, desc1s
 
 
 class SharedAttentionalPropagation(nn.Module):
@@ -240,3 +231,6 @@ class SAGNN(nn.Module):
             for i in range(len(layer_names))
         ])
         self.names = layer_names
+
+    def forward(self, desc0, desc1):
+        pass
