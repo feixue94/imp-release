@@ -8,7 +8,8 @@
 import torch
 import torch.nn as nn
 
-from nets.layers import MLP, KeypointEncoder, normalize_keypoints, sink_algorithm, arange_like, dual_softmax
+from nets.layers import KeypointEncoder, normalize_keypoints, sink_algorithm, arange_like, dual_softmax
+from nets.layers import SAGNN
 from nets.loss import GraphLoss
 
 
@@ -48,9 +49,6 @@ class GM(nn.Module):
 
         print('config in GM: ', self.config)
 
-        self.neg_ratio = self.config['neg_ratio']
-        self.multi_scale = self.config['multi_scale']
-        self.multi_proj = self.config['multi_proj']
         self.n_layers = self.config['n_layers']
 
         self.with_sinkhorn = self.config['with_sinkhorn']
@@ -61,10 +59,9 @@ class GM(nn.Module):
             self.config['descriptor_dim'], self.config['keypoint_encoder'],
             ac_fn=self.config['ac_fn'],
             norm_fn=self.config['norm_fn'])
-        self.gnn = AttentionalGNN(
+        self.gnn = SAGNN(
             feature_dim=self.config['descriptor_dim'],
             layer_names=self.config['GNN_layers'],
-            pooling_sizes=self.config['pooling_sizes'],
             ac_fn=self.config['ac_fn'],
             norm_fn=self.config['norm_fn'],
         )
@@ -85,7 +82,6 @@ class GM(nn.Module):
         self.cross_prob1 = None
 
     def forward_train(self, data):
-        """Run SuperGlue on a pair of keypoints and descriptors"""
         desc0, desc1 = data['descriptors0'], data['descriptors1']
         kpts0, kpts1 = data['keypoints0'], data['keypoints1']
         scores0, scores1 = data['scores0'], data['scores1']

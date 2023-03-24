@@ -167,3 +167,76 @@ class AttentionalGNN(nn.Module):
             return desc0s, desc1s, probs
         else:
             return desc0s, desc1s
+
+
+class SharedAttentionalPropagation(nn.Module):
+    def __init__(self, feature_dim: int, num_heads: int, sharing_attention: bool = False, ac_fn: str = 'relu',
+                 norm_fn: str = 'bn'):
+        super().__init__()
+        self.sharing_attention = sharing_attention
+        self.feature_dim = feature_dim
+        if not sharing_attention:
+            self.attn = MultiHeadedAttention(num_heads, feature_dim)
+            self.mlp = MLP([feature_dim * 2, feature_dim * 2, feature_dim], ac_fn=ac_fn, norm_fn=norm_fn)
+            nn.init.constant_(self.mlp[-1].bias, 0.0)
+        else:
+            self.dim = feature_dim // num_heads
+            self.num_heads = num_heads
+            self.proj = nn.Conv1d(feature_dim, feature_dim, kernel_size=1)
+            self.merge = nn.Conv1d(feature_dim, feature_dim, kernel_size=1)
+            self.mlp = MLP([feature_dim * 2, feature_dim * 2, feature_dim], ac_fn=ac_fn, norm_fn=norm_fn)
+            nn.init.constant_(self.mlp[-1].bias, 0.0)
+
+    def forward(self, x, source, prob=None, M=None):
+        """
+        :param x: [B, C, N]
+        :param source: [B, C, N]
+        :param prob: [B, C, H, N]
+        :return: [B, C, N]
+        """
+        if not self.sharing_attention:
+            message = self.attn(x, source, source, M=M)
+            self.prob = self.attn.prob
+            y = torch.cat([x, message], dim=1)
+        else:
+            batch_dim = x.size(0)
+            value = self.proj(source).view(batch_dim, self.dim, self.num_heads, -1)
+            message = torch.einsum('bhnm,bdhm->bdhn', prob, value)
+            message = self.merge(message.contiguous().view(batch_dim, self.dim * self.num_heads, -1))
+            self.prob = prob
+            y = torch.cat([x, message], dim=1)
+
+            # out = self.mlp(torch.cat([x, message], dim=1))
+
+        # print('after mlp: ', self.sharing_attention, out[0, :-3, 0:5], x[0, :-3, 0:5], message[0, :-3, 0:5])
+        # print('mlp weights: ', self.mlp.state_dict())
+
+        '''
+        if M is None:
+            return self.mlp(y)
+        else:
+            with torch.no_grad():
+                sids0 = torch.where(torch.sum(M, dim=-1) > 0)[1]
+            out = torch.zeros(size=(y.shape[0], self.feature_dim, y.shape[-1]), dtype=y.dtype, device=y.device)
+            # sids1 = torch.where(torch.sum(M, dim=-1) == 0)[1]
+            out[:, :, sids0] = self.mlp(y[:, :, sids0])
+            # out[:, :, sids1] = self.mlp(y[:, :, sids1])
+            return out
+        '''
+        return self.mlp(y)
+
+
+class SAGNN(nn.Module):
+    def __init__(self, feature_dim: int, layer_names: list,
+                 sharing_layers: list = None, ac_fn='relu', norm_fn='bn'):
+        super().__init__()
+        if sharing_layers is None:
+            self.sharing_layers = [False for i in range(len(layer_names))]
+        else:
+            self.sharing_layers = sharing_layers
+        self.layers = nn.ModuleList([
+            SharedAttentionalPropagation(num_heads=4, feature_dim=feature_dim, sharing_attention=self.sharing_layers[i],
+                                         ac_fn=ac_fn, norm_fn=norm_fn)
+            for i in range(len(layer_names))
+        ])
+        self.names = layer_names
