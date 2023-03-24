@@ -12,9 +12,15 @@ import cv2
 import torch
 import h5py
 from tqdm import tqdm
+import argparse
 from torch.utils.data import Dataset
 from nets.superpoint import SuperPoint
 from tools.geometry import match_from_projection_points_torch
+
+parse = argparse.ArgumentParser(description='IMP', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parse.add_argument('--feature_type', type=str, default='spp')
+parse.add_argument('--base_path', type=str, required=True)
+parse.add_argument('--save_path', type=str, required=True)
 
 
 def plot_matches_cv2(image0, image1, kpts0, kpts1, matches, margin=10, inliers=None):
@@ -87,7 +93,7 @@ class Megadepth:
                 spp_config = {
                     'descriptor_dim': 256,
                     'nms_radius': 3,
-                    'keypoint_threshold': 0.005,
+                    'keypoint_threshold': 0.001,
                     'max_keypoints': self.nfeatures,
                     'remove_borders': 4,
                     'weight_path': '/home/mifs/fx221/Research/Code/pnba/weights/superpoint_v1.pth',
@@ -139,9 +145,6 @@ class Megadepth:
                 kps = torch.vstack(outputs['keypoints']).cpu().numpy()
                 descs = torch.vstack(outputs['descriptors']).cpu().numpy().transpose()
                 scores = torch.vstack(outputs['scores']).cpu().numpy().reshape(-1, )
-                del norm_img
-                del outputs
-
         return kps, scores, descs
 
     def __getitem__(self, idx):
@@ -152,6 +155,7 @@ class Megadepth:
 
         with h5py.File(osp.join(self.base_path, depth_path), 'r') as hf5_f:
             depth = np.array(hf5_f['/depth'])
+
         assert (np.min(depth) >= 0)
 
         image = cv2.imread(osp.join(self.base_path, image_path))
@@ -175,7 +179,7 @@ class Megadepth:
     def __len__(self):
         return len(self.image_paths)
 
-    def build_correspondence(self, scene, save_dir, show_match=False, pre_load=False):
+    def build_correspondence(self, scene, save_dir, show_match=False, pre_load=True):
         keypoint_dir = osp.join(save_dir, 'keypoints_{:s}'.format(self.feature_type), scene)
         match_dir = osp.join(save_dir, 'matches_{:s}'.format(self.feature_type))
         print(keypoint_dir, match_dir)
@@ -222,7 +226,7 @@ class Megadepth:
             for img_path in tqdm(image_paths, total=len(image_paths)):
                 if img_path is None:
                     continue
-                kpt_fn = osp.join(keypoint_dir, img_path.split('/')[-1] + '_' + feature_type + '.npy')
+                kpt_fn = osp.join(keypoint_dir, img_path.split('/')[-1] + '_' + self.feature_type + '.npy')
                 if osp.isfile(kpt_fn):
                     data = np.load(kpt_fn, allow_pickle=True).item()
                     all_keypoints[kpt_fn] = data
@@ -254,7 +258,7 @@ class Megadepth:
             intrinsics1 = intrinsics[idx1]
             intrinsics2 = intrinsics[idx2]
 
-            kpt_fn1 = osp.join(keypoint_dir, image_path1.split('/')[-1] + '_' + feature_type + '.npy')
+            kpt_fn1 = osp.join(keypoint_dir, image_path1.split('/')[-1] + '_' + self.feature_type + '.npy')
             if kpt_fn1 in all_keypoints.keys():
                 data1 = all_keypoints[kpt_fn1]
             else:
@@ -267,7 +271,7 @@ class Megadepth:
             if kpts1.shape[0] < 1024:
                 continue
 
-            kpt_fn2 = osp.join(keypoint_dir, image_path2.split('/')[-1] + '_' + feature_type + '.npy')
+            kpt_fn2 = osp.join(keypoint_dir, image_path2.split('/')[-1] + '_' + self.feature_type + '.npy')
             if kpt_fn2 in all_keypoints.keys():
                 data2 = all_keypoints[kpt_fn2]
             else:
@@ -345,7 +349,9 @@ class Megadepth:
                 img2 = cv2.imread(osp.join(self.base_path, image_path2))
                 img_match = plot_matches_cv2(image0=img1, image1=img2, kpts0=kpts1, kpts1=kpts2, matches=inlier_matches)
                 cv2.imshow('img', img_match)
-                cv2.waitKey(0)
+                key = cv2.waitKey()
+                if key == ord('q'):
+                    exit(0)
 
             valid_pairs.append({
                 'image_path1': image_paths[idx1],
@@ -367,6 +373,7 @@ class Megadepth:
 
         if len(valid_pairs) > 0:
             np.save(osp.join(match_dir, scene), valid_pairs)
+
         print('Find {:d}/{:d} valid pairs from scene {:s}'.format(len(valid_pairs), len(selected_ids), scene))
         scene_nvalid = {}
         scene_nvalid[scene] = len(valid_pairs)
@@ -427,9 +434,14 @@ class Megadepth:
 
 
 if __name__ == '__main__':
-    feat_type = 'spp'  # 'sift'
-    base_path = '/scratches/flyer_3/fx221/dataset/Megadepth'
+    args = parse.parse_args()
+    feat_type = args.feature_type
+    base_path = args.base_path  # '/scratches/flyer_3/fx221/dataset/Megadepth'
     scene_list_fn = 'assets/megadepth_scenes_full.txt'
+    save_path = args.save_path
+
+    # save_dir = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data'
+    save_path_keypoint = osp.join(save_path, 'keypoints_{:s}'.format(feat_type))
 
     scenes = []
     with open(scene_list_fn, 'r') as f:
@@ -442,10 +454,7 @@ if __name__ == '__main__':
                      base_path=base_path,
                      scene_list_fn=scene_list_fn,
                      nfeatures=4096,
-                     # feature_type='sift',
                      feature_type=feat_type,
-                     # feature_type=None,
-                     # extract_features=False,
                      extract_features=True,
                      inlier_th=5,
                      min_overlap_ratio=0.1,
@@ -453,15 +462,12 @@ if __name__ == '__main__':
                      )
 
     loader = torch.utils.data.DataLoader(dataset=mega,
-                                         num_workers=8,
+                                         num_workers=0,
                                          shuffle=False,
                                          batch_size=1,
                                          pin_memory=True,
                                          )
-
-    save_dir = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data'
-    save_dir_keypoint = osp.join(save_dir, 'keypoints_{:s}'.format(feat_type))
-
+    '''
     print('Start extracting keypoints...')
     for bid, data in tqdm(enumerate(loader), total=len(loader)):
         image_path = data['image_path'][0]
@@ -478,10 +484,10 @@ if __name__ == '__main__':
         scene = image_paths[1]
         img_fn = image_paths[-1]
 
-        if not osp.exists(osp.join(save_dir_keypoint, scene)):
-            os.makedirs(osp.join(save_dir_keypoint, scene))
+        if not osp.exists(osp.join(save_path_keypoint, scene)):
+            os.makedirs(osp.join(save_path_keypoint, scene))
 
-        save_fn = osp.join(save_dir_keypoint, scene, img_fn + '_{:s}'.format(feat_type))
+        save_fn = osp.join(save_path_keypoint, scene, img_fn + '_{:s}'.format(feat_type))
         save_data = {
             'image_path': image_path,
             'depth_path': depth_path,
@@ -496,11 +502,12 @@ if __name__ == '__main__':
         np.save(save_fn, save_data)
 
     print('Finish extracting keypoints...')
+    '''
 
     print('Start building correspondences...')
     scene_npairs = []
-    for s in scenes:
-        s_pairs = mega.build_correspondence(scene=s, save_dir=save_dir)
+    for s in scenes:  # you can split it into several slices and do them parallelly
+        s_pairs = mega.build_correspondence(scene=s, save_dir=save_path, show_match=False, pre_load=True)
         mega.write_matches(scene_list=[s])
 
     # merge scene-pairs to a single file
@@ -508,5 +515,5 @@ if __name__ == '__main__':
     for d in scene_npairs:
         mega_scene_pairs = {**mega_scene_pairs, **d}
     np.save('asserts/mega_nvalid_{:s}'.format(feat_type), mega_scene_pairs)
-    
+
     print('Finish building correspondences...')
