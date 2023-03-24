@@ -173,7 +173,7 @@ class Trainer:
 
             if self.args.local_rank == 0 and bidx % self.args.log_intervals == 0:
                 matching_score = pred['matching_scores0'][-1]
-                print_text = 'Epoch [{:d}/{:d}], Step [{:d}/{:d}/{:d}], Loss [m{:.2f}//t{:.2f}], MS [{:.2f}], Acc [c{:.1f}/{:.1f}, n{:.1f}/{:.1f}]'.format(
+                print_text = 'Epoch [{:d}/{:d}], Step [{:d}/{:d}/{:d}], Loss [m{:.2f}/t{:.2f}], MS [{:.2f}], Acc [c{:.1f}/{:.1f}, n{:.1f}/{:.1f}]'.format(
                     self.epoch,
                     self.num_epochs, bidx,
                     len(self.train_loader),

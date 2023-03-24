@@ -5,15 +5,12 @@ import numpy as np
 from tqdm import trange, tqdm
 import torch
 import torch.utils.data as Data
-
 from torch.multiprocessing import Pool
-
 from components.readers import standard_reader
 from components.evaluators import auc_eval, FMbench_eval
 from components.utils import evaluation_utils
 
 
-# from utils import evaluation_utils, metrics
 def feed_match(info, matcher):
     x1, x2, desc1, desc2, size1, size2 = info['x1'], info['x2'], info['desc1'], info['desc2'], info['img1'].shape[:2], \
                                          info['img2'].shape[:2]
