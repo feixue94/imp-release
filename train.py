@@ -19,18 +19,12 @@ import json
 import os
 import os.path as osp
 import torch
-import torchvision.transforms.transforms as tvf
 import torch.utils.data as Data
 from nets.superglue import SuperGlue
-from nets.graphmatching import GraphMatcher
 from nets.gm import GM
-from nets.gmb import GMB
-from nets.gmn import GMN
-from nets.gmn import DGNN, DGNNP, DGNNS, DGNNPS
-from nets.spgo import SPGO
 from nets.adgm import AdaGMN
+from nets.gms import DGNNS
 from trainer import Trainer
-from dataset.mscoco import MSCOCO
 from dataset.megadepth import Megadepth, read_matches
 from tools.common import torch_set_gpu
 import torch.multiprocessing as mp
@@ -116,7 +110,7 @@ def train_DDP(rank, world_size, model, args):
 
 
 if __name__ == '__main__':
-    # torch.multiprocessing.set_start_method('spawn')  # don't use for mega [keypoint, matches], will cause ram oom
+    # torch.multiprocessing.set_start_method('spawn')  # don't use for mega [keypoint, matches], cause oom
     args = parser.parse_args()
     with open(args.config, 'rt') as f:
         t_args = argparse.Namespace()
@@ -159,18 +153,10 @@ if __name__ == '__main__':
 
     if args.network == 'superglue':
         model = SuperGlue(config.get('matcher', {}))
-    elif args.network == 'graphmatcher':
-        model = GraphMatcher(config.get('matcher', {}))
     elif args.network == 'gm':
         model = GM(config.get('matcher', {}))
-    elif args.network == 'dgnn':
-        model = DGNN(config.get('matcher', {}))
-    elif args.network == 'dgnnp':
-        model = DGNNP(config.get('matcher', {}))
     elif args.network == 'dgnns':
         model = DGNNS(config.get('matcher', {}))
-    elif args.network == 'dgnnps':
-        model = DGNNPS(config.get('matcher', {}))
 
     if args.local_rank == 0:
         print('model: ', model)

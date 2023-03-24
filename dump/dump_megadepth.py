@@ -183,6 +183,7 @@ class Megadepth:
         keypoint_dir = osp.join(save_dir, 'keypoints_{:s}'.format(self.feature_type), scene)
         match_dir = osp.join(save_dir, 'matches_{:s}'.format(self.feature_type))
         print(keypoint_dir, match_dir)
+        os.makedirs(match_dir, exist_ok=True)
 
         if osp.isfile(osp.join(match_dir, scene + '.npy')):
             return

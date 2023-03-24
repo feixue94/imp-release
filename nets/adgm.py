@@ -12,25 +12,8 @@ from nets.layers import SAGNN
 from nets.layers import normalize_keypoints
 
 
-# class AdaGNN(nn.Module):
-#     def __init__(self, feature_dim: int, layer_names: list,
-#                  sharing_layers: list = None, ac_fn='relu', norm_fn='bn'):
-#         super().__init__()
-#         if sharing_layers is None:
-#             self.sharing_layers = [False for i in range(len(layer_names))]
-#         else:
-#             self.sharing_layers = sharing_layers
-#         self.layers = nn.ModuleList([
-#             SharedAttentionalPropagation(num_heads=4, feature_dim=feature_dim, sharing_attention=self.sharing_layers[i],
-#                                          ac_fn=ac_fn, norm_fn=norm_fn)
-#             for i in range(len(layer_names))
-#         ])
-#         self.names = layer_names
-
-
 class AdaGMN(GM):
     def __init__(self, config={}):
-        # pool_sizes = [0, 0] * 2 + [2, 2, 1, 1] * 21
         self.pool_sizes = [0, 0] * 2 + [0, 0, 0, 0] * 21
         self.sharing_layers = [False, False] * 2 + [False, False, True, True] * 21
         super().__init__(config={**config, **{'pool_sizes': self.pool_sizes}})
@@ -153,17 +136,12 @@ class AdaGMN(GM):
             # print('cross desc0: ', ni, desc0[0, 0, gids0][0:5])
             # print('cross desc1: ', ni, desc1[0, 0, gids1][0:5])
 
-            if not self.multi_proj:
-                mdesc0 = self.final_proj(desc0)
-                mdesc1 = self.final_proj(desc1)
-            else:
-                mdesc0 = self.final_proj[ni](desc0)
-                mdesc1 = self.final_proj[ni](desc1)
+            mdesc0 = self.final_proj[ni](desc0)
+            mdesc1 = self.final_proj[ni](desc1)
 
             if ni < self.first_it_to_update:
                 dist = torch.einsum('bdn,bdm->bnm', mdesc0, mdesc1)
                 dist = dist / self.config['descriptor_dim'] ** .5
-                # pred_score = sink_algorithm(M=dist, dustbin=self.bin_score, iteration=self.sinkhorn_iterations)
                 pred_score = self.compute_score(dist=dist, dustbin=self.bin_score, iteration=self.sinkhorn_iterations)
 
                 loss = self.match_net.compute_matching_loss_batch(pred_scores=pred_score,
@@ -289,22 +267,6 @@ class AdaGMN(GM):
                             all_gids0[bi] = gids0
                             all_gids1[bi] = gids1
 
-                            # update M here
-                            ng0 = gids0.shape[-1]
-                            ng1 = gids1.shape[-1]
-
-                            # M00[bi,
-                            #     gids0[:, None].repeat(1, ng0).reshape(-1).long(),
-                            #     gids0[None, :].repeat(ng0, 1).reshape(-1).long()] = 1
-                            # M11[bi,
-                            #     gids1[:, None].repeat(1, ng1).reshape(-1).long(),
-                            #     gids1[None, :].repeat(ng1, 1).reshape(-1).long()] = 1
-                            # M01[bi,
-                            #     gids1[:, None].repeat(1, ng0).reshape(-1).long(),
-                            #     gids0[None, :].repeat(ng1, 1).reshape(-1).long()] = 1
-                            # M10[bi,
-                            #     gids0[:, None].repeat(1, ng1).reshape(-1).long(),
-                            #     gids1[None, :].repeat(ng0, 1).reshape(-1).long()] = 1
                             M00[bi, :, gids0.long()] = 1
                             M01[bi, :, gids0.long()] = 1
                             M11[bi, :, gids1.long()] = 1
@@ -1767,7 +1729,7 @@ class AdaGMN(GM):
         return full_ids0, full_ids1
 
     def run(self, data):
-        # used for evaluation of sgmnet
+        # used for evaluation
         desc0 = data['desc1']
         desc1 = data['desc2']
         kpts0 = data['x1'][:, :, :2]
