@@ -21,14 +21,15 @@ from components.utils.evaluation_utils import normalize_intrinsic
 from components.utils.metrics import compute_epi_inlier
 from tools.utils import compute_pose_error, pose_auc
 from tools.utils import estimate_pose_m_v2
-from eval.matching import matching_iterative_v5, matching_iterative
+from eval.matching import matching_iterative
 
 parser = argparse.ArgumentParser(description='IMP', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--matching_method', type=str, default='IMP')
 parser.add_argument('--dataset', type=str, default='scannet')
 parser.add_argument('--feature_type', type=str, default='spp')
-parser.add_argument('--use_sinkhorn', action='store_true', default=True)
+parser.add_argument('--use_dual_softmax', action='store_true', default=False)
 parser.add_argument('--use_iterative', action='store_true', default=False)
+parser.add_argument('--use_uncertainty', action='store_true', default=False)
 
 
 def eval(model):
@@ -234,12 +235,9 @@ if __name__ == '__main__':
     feat = args.feature_type
     dataset = args.dataset
     use_iterative = args.use_iterative
-    with_sinkhorn = args.use_sinkhorn
+    use_sinkhorn = (not args.use_dual_softmax)
+    use_uncertainty = args.use_uncertainty
     matching_method = args.matching_method
-    # matching_method = 'IMP'
-    # matching_method = 'IMP_geo'
-    # matching_method = 'EIMP'
-    # matching_method = 'EIMP_geo'
     if dataset == 'scannet':
         if feat == 'spp':
             config_path = 'configs/scannet_eval_gm.yaml'
@@ -266,7 +264,7 @@ if __name__ == '__main__':
         'sinkhorn_iterations': 20,
         'match_threshold': 0.2,
 
-        'with_sinkhorn': with_sinkhorn,
+        'with_sinkhorn': use_sinkhorn,
         'n_layers': 15,  # with sharing layers
         'GNN_layers': ['self', 'cross'] * 15,
         'ac_fn': 'relu',
@@ -315,4 +313,5 @@ if __name__ == '__main__':
     with torch.no_grad():
         reults = eval(model=net)
 
-    print('Results of model {} on {} dataset with iterative {}'.format(matching_method, dataset, use_iterative))
+    print('Results of model {} on {} dataset with iterative {} with sinkhorn'.format(matching_method, dataset,
+                                                                                     use_iterative, with_sinkhorn))
