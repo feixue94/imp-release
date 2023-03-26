@@ -313,5 +313,9 @@ if __name__ == '__main__':
     with torch.no_grad():
         reults = eval(model=net)
 
-    print('Results of model {} on {} dataset with iterative {} with sinkhorn'.format(matching_method, dataset,
-                                                                                     use_iterative, with_sinkhorn))
+    print(
+        'Results of model {} on {} dataset (iterative {}, sinkhorn {}, uncertainty {}'.format(matching_method,
+                                                                                              dataset,
+                                                                                              use_iterative,
+                                                                                              use_sinkhorn,
+                                                                                              use_uncertainty))
