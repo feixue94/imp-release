@@ -47,7 +47,7 @@ class GM(nn.Module):
         super().__init__()
         self.config = {**self.default_config, **config}
 
-        print('config in GM: ', self.config)
+        # print('config in GM: ', self.config)
 
         self.n_layers = self.config['n_layers']
 
@@ -178,7 +178,7 @@ class GM(nn.Module):
         desc1 = desc1 + enc1
 
         # Multi-layer Transformer network.
-        desc0s, desc1s, all_matches = self.gnn(desc0, desc1)
+        desc0s, desc1s = self.gnn(desc0, desc1)
 
         nI = len(desc0s)
         nB = desc0.shape[0]
@@ -348,7 +348,7 @@ class GM(nn.Module):
         desc1 = desc1 + enc1
 
         # Multi-layer Transformer network.
-        desc0s, desc1s, all_matches = self.gnn(desc0, desc1)
+        desc0s, desc1s = self.gnn(desc0, desc1)
 
         desc0s = desc0s[-1]  # [nI * nB, C, N]
         desc1s = desc1s[-1]

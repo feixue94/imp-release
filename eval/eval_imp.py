@@ -19,19 +19,227 @@ from nets.gm import GM
 from nets.gms import DGNNS
 from nets.adgm import AdaGMN
 from eval.eval_yfcc_full import evaluate_full
+from components.utils.evaluation_utils import normalize_intrinsic
+from components.utils.metrics import compute_epi_inlier
+from tools.utils import compute_pose_error, compute_epipolar_error, error_colormap, pose_auc
+from tools.utils import estimate_pose_m_v2
 
 
 def eval(model):
     thresholds = [5, 10, 20, 50]
+    pose_errors = []
+    precisions = []
+    matching_scores = []
     num_iterations = np.zeros(shape=(nI + 1, 1), dtype=int)
+
+    for index in tqdm(range(len(reader_loader)), total=len(reader_loader)):
+        info = reader.run(index=index)
+        img0, img1, E, R, t, K0, K1 = info['img1'], info['img2'], info['e'], info['r_gt'], info['t_gt'], info['K1'], \
+                                      info['K2']
+        x0, x1, descs0, descs1, size0, size1 = info['x1'], info['x2'], info['desc1'], info['desc2'], info['img1'].shape[
+                                                                                                     :2], \
+                                               info['img2'].shape[:2]
+
+        pts0 = x0[:, :2]
+        scores0 = x0[:, 2]
+        pts1 = x1[:, :2]
+        scores1 = x1[:, 2]
+
+        norm_pts0 = normalize_intrinsic(x=pts0, K=K0)
+        norm_pts1 = normalize_intrinsic(x=pts1, K=K1)
+
+        T_0to1 = np.hstack([R, t.reshape(3, 1)])
+        feed_data = {
+            'keypoints0': torch.from_numpy(pts0).cuda().float()[None],
+            'keypoints1': torch.from_numpy(pts1).cuda().float()[None],
+
+            'image0': torch.from_numpy(img0).cuda().float()[None],
+            'image1': torch.from_numpy(img1).cuda().float()[None],
+
+            'descriptors0': torch.from_numpy(descs0).cuda().float()[None],
+            'descriptors1': torch.from_numpy(descs1).cuda().float()[None],
+
+            'scores0': torch.from_numpy(scores0).cuda().float()[None],
+            'scores1': torch.from_numpy(scores1).cuda().float()[None],
+
+            'K0': K0,
+            'K1': K1,
+            'T_0to1': T_0to1,
+            'pts0_cpu': pts0,
+            'pts1_cpu': pts1,
+            'image_color0': img0,
+            'image_color1': img1,
+        }
+
+        if 'rescale' in eval_config.keys():
+            rescale = eval_config['rescale']
+            size0, size1 = max(img0.shape), max(img1.shape)
+            scale0, scale1 = rescale / size0, rescale / size1
+        else:
+            scale0, scale1 = 1.0, 1.0
+
+        conf_th = 0.7
+        stop_criteria = {
+            'match': conf_th,
+            'pose': 1.5,
+        }
+
+        if use_iterative:
+            matches, conf, pred_R, pred_t, ni = matching_iterative_v5(
+                nI=nI,
+                data=feed_data,
+                model=model,
+                pose_model=pose_net,
+                error_th=error_th,
+                conf_th=conf_th,
+                inlier_th=inlier_th,
+                stop_criteria=stop_criteria,
+                vis_matches=vis_matches,
+                pose_hypothesis=pose_hypothesis,
+                match_ratio=match_ratio,
+                method=method,
+                use_first=use_first,
+                topK=topK,
+                aug_matches=aug_matches,
+                use_refinement=use_refinement,
+                min_kpts=min_kpts,
+            )
+
+            valid = (matches > -1)
+            mconf = conf[valid]
+            pred_matches = np.vstack([np.where(matches > -1), matches[valid]]).transpose()
+            # print(pred_matches.shape)
+
+            mkpts0 = pts0[valid]
+            mkpts1 = pts1[matches[valid]]
+
+            # epi_errs = compute_epipolar_error(mkpts0, mkpts1, T_0to1, K0, K1)
+            # correct = epi_errs <= acc_error_th
+            norm_mkpts0 = norm_pts0[valid]
+            norm_mkpts1 = norm_pts1[matches[valid]]
+
+            correct = compute_epi_inlier(x1=norm_mkpts0, x2=norm_mkpts1, E=E, inlier_th=0.005)
+
+            num_correct = np.sum(correct)
+            matching_score = num_correct / len(pts0) if len(pts0) > 0 else 0
+            precision = np.mean(correct) if len(correct) > 0 else 0
+
+            if pred_R is None:
+                print('pred_R is None')
+                ret = estimate_pose_m_v2(mkpts0, mkpts1, K0, K1, error_th, method=method)
+                if ret is None:
+                    err_t, err_R = np.inf, np.inf
+                else:
+                    pred_R, pred_t, inliers = ret
+                    if pred_R is not None:
+                        R = pred_R
+                        t = pred_t
+                    err_t, err_R = compute_pose_error(T_0to1, R, t)
+            else:
+                err_t, err_R = compute_pose_error(T_0to1=T_0to1, R=pred_R, t=pred_t)
+
+            for v in range(nI):
+                if ni <= v + 1:
+                    num_iterations[v + 1] += 1
+        else:
+            pred_R = None
+            pred_t = None
+            # match_out = net.produce_matches_test_R50(data={
+            match_out = net.produce_matches(data={
+                # match_out = net.forward_train(data={
+                'keypoints0': torch.from_numpy(pts0).cuda().float()[None],
+                'keypoints1': torch.from_numpy(pts1).cuda().float()[None],
+
+                'image0': torch.from_numpy(img0).cuda().float().permute(2, 0, 1)[None],
+                'image1': torch.from_numpy(img1).cuda().float().permute(2, 0, 1)[None],
+
+                'descriptors0': torch.from_numpy(descs0).cuda().float()[None],
+                'descriptors1': torch.from_numpy(descs1).cuda().float()[None],
+
+                'scores0': torch.from_numpy(scores0).cuda().float()[None],
+                'scores1': torch.from_numpy(scores1).cuda().float()[None],
+
+                # 'matching_mask': torch.randint(0, 1, size=(2001, 2001)).cuda()[None]
+            },
+                p=0.2,
+                only_last=False,
+                mscore_th=0.1,
+                uncertainty_ratio=1.,
+            )
+            indices0 = match_out['indices0']
+            mscores0 = match_out['mscores0']
+            # print(indices0.shape, mscores0.shape)
+            print(len(indices0), len(mscores0))
+            # exit(0)
+
+            # if len(indices0.shape) == 4:  # [NI, B, N, M]
+            if type(indices0) == list:  # [NI, B, N, M]
+                matches = indices0[-1][0].cpu().numpy()
+                conf = mscores0[-1][0].cpu().numpy()
+            else:
+                matches = indices0[0].cpu().numpy()
+                conf = mscores0[0].cpu().numpy()
+
+            num_iterations[nI] += 1
+
+            valid = (matches > -1)
+            mconf = conf[valid]
+
+            pred_matches = np.vstack([np.where(matches > -1), matches[valid]]).transpose()
+            # print(pred_matches.shape)
+
+            mkpts0 = pts0[valid]
+            mkpts1 = pts1[matches[valid]]
+            # epi_errs = compute_epipolar_error(mkpts0, mkpts1, T_0to1, K0, K1)
+            # correct = epi_errs <= acc_error_th
+            norm_mkpts0 = norm_pts0[valid]
+            norm_mkpts1 = norm_pts1[matches[valid]]
+            correct, epi_errs = compute_epi_inlier(x1=norm_mkpts0, x2=norm_mkpts1, E=E, inlier_th=0.005,
+                                                   return_error=True)
+
+            num_correct = np.sum(correct)
+            matching_score = num_correct / len(pts0) if len(pts0) > 0 else 0
+            precision = np.mean(correct) if len(correct) > 0 else 0
+
+            ret = estimate_pose_m_v2(mkpts0, mkpts1, K0, K1, error_th, method=method)
+            # ret = estimate_pose_m(mkpts0, mkpts1, K0, K1, error_th, method=method)
+
+            if ret is None:
+                err_t, err_R = np.inf, np.inf
+            else:
+                R, t, inliers = ret
+                if pred_R is not None:
+                    R = pred_R
+                    t = pred_t
+                err_t, err_R = compute_pose_error(T_0to1, R, t)
+
+        print('err_R: {:.2f}, err_t: {:.2f}'.format(err_R, err_t))
+
+        pose_errors.append(np.max([err_R, err_t]))
+        precisions.append(precision)
+        matching_scores.append(matching_score)
+        aucs = pose_auc(pose_errors, thresholds)
+        aucs = [100. * yy for yy in aucs]
+        prec = 100. * np.mean(precisions)
+        ms = 100. * np.mean(matching_scores)
+        print('Evaluation Results (mean over {} pairs):'.format(len(pose_errors)))
+        print('AUC@5\t AUC@10\t AUC@20\t AUC@50\t Prec\t MScore\t Mkpts \t Ikpts')
+        print('{:.2f}\t {:.2f}\t {:.2f}\t {:.2f}\t {:.2f}\t {:.2f}\t'.format(
+            aucs[0], aucs[1], aucs[2], aucs[3], prec, ms))
+        # print('Its: ')
+        # print(num_iterations.shape, len(pose_errors), num_iterations[1])
+        for ni in range(nI):
+            print('It {:d} with {:.2f}'.format(ni + 1, num_iterations[ni + 1, 0] / len(pose_errors)))
 
 
 if __name__ == '__main__':
     feat = 'spp'
-    dataset = 'yfcc'
+    # dataset = 'yfcc'
+    dataset = 'scannet'
+    use_iterative = False
     with_sinkhorn = True
-    matching_method = 'SuperGlue'
-    # matching_method = 'IMP'
+    # matching_method = 'SuperGlue'
+    matching_method = 'IMP'
     # matching_method = 'IMP_geo'
     # matching_method = 'EIMP'
     # matching_method = 'EIMP_geo'
@@ -73,16 +281,58 @@ if __name__ == '__main__':
 
     nI = 15
 
+    model_dict = {
+        'IMP_geo': {
+            'network': DGNNS(config=config),
+            'weight': {
+                'scannet': '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.185.pth',
+                'yfcc': '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.190.pth',
+            }
+        },
+        'IMP': {
+            'network': DGNNS(config=config),
+            'weight': {
+                'scannet': '2022_07_15_13_49_43_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/dgnns.885.pth',
+                'yfcc': '2022_07_15_13_49_43_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/dgnns.885.pth',
+            }
+        },
+        'EIMP': {
+            'network': AdaGMN(config=config),
+            'weight': {
+                'scannet': '2022_10_06_15_06_23_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/adagmn.100.pth',
+                'yfcc': '2022_10_06_15_06_23_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/adagmn.100.pth',
+            }
+        },
+        'EIMP_geo': {
+            'network': AdaGMN(config=config),
+            'weight': {
+                'scannet': '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.75.pth',
+                'yfcc': '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.45.pth',
+            }
+        }
+    }
+
+    '''
     if matching_method == 'IMP_geo':
         net = DGNNS(config=config)
         weight_path = '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.185.pth'  # scannet
         # weight_path = '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.190.pth' # yfcc
-    elif matching_method == 'EIMP_geo':
-        net = AdaGMN(config=config_ours)
-        weight_path = '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.75.pth'  # scannet only
+        
+        # weight_path = '2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth'
+        # weight_path = '2022_09_24_12_59_29_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.125.pth'
 
+    elif matching_method == 'EIMP_geo':
+        net = AdaGMN(config=config)
+        # weight_path = '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.45.pth' # yfcc
+
+        weight_path = '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.75.pth'  # scannet only
+    '''
+    net = model_dict[matching_method]['network']
+    weight_path = model_dict[matching_method]['weight'][dataset]
     weight_root = '/scratches/flyer_3/fx221/exp/pnba/'
-    net.load_state_dict(torch.load(osp.join(weight_root, weight_path))['model'], strict=True)
+    net.load_state_dict(state_dict=torch.load(osp.join(weight_root, weight_path))['model'], strict=True)
     net = net.cuda().eval()
 
     reults = eval(model=net)
+
+    print('Results of model {} on {} dataset with iterative {}'.format(matching_method, dataset, use_iterative))

@@ -233,4 +233,21 @@ class SAGNN(nn.Module):
         self.names = layer_names
 
     def forward(self, desc0, desc1):
-        pass
+        desc0s = []
+        desc1s = []
+
+        for i, (layer, name) in enumerate(zip(self.layers, self.names)):
+            if name == 'cross':
+                src0, src1 = desc1, desc0
+            else:
+                src0, src1 = desc0, desc1
+            delta0 = layer(desc0, src0)
+            # prob0 = layer.attn.prob
+            delta1 = layer(desc1, src1)
+            # prob1 = layer.attn.prob
+            desc0, desc1 = (desc0 + delta0), (desc1 + delta1)
+
+            if name == 'cross':
+                desc0s.append(desc0)
+                desc1s.append(desc1)
+        return desc0s, desc1s
