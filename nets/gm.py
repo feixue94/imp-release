@@ -288,12 +288,8 @@ class GM(nn.Module):
         return self.kenc(norm_kpts0, scores0), self.kenc(norm_kpts1, scores1)
 
     def compute_distance(self, desc0, desc1, layer_id=-1):
-        if not self.multi_proj:
-            mdesc0 = self.final_proj(desc0)
-            mdesc1 = self.final_proj(desc1)
-        else:
-            mdesc0 = self.final_proj[layer_id](desc0)
-            mdesc1 = self.final_proj[layer_id](desc1)
+        mdesc0 = self.final_proj[layer_id](desc0)
+        mdesc1 = self.final_proj[layer_id](desc1)
         dist = torch.einsum('bdn,bdm->bnm', mdesc0, mdesc1)
         dist = dist / self.config['descriptor_dim'] ** .5
         return dist

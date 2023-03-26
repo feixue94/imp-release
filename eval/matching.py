@@ -14,8 +14,21 @@ from nets.gm import normalize_keypoints
 from tools.utils import plot_matches_spg, error_colormap
 from tools.utils import compute_pose_error, angle_error_mat, angle_error_vec
 from tools.common import resize_img
-from components.utils.metrics import compute_epi_inlier
-from components.utils.evaluation_utils import normalize_intrinsic
+
+
+def check_colinear(pts):
+    n = pts.shape[0]
+    for i in range(2, n):
+        for j in range(1, i):
+            dx1 = pts[j, 0] - pts[i, 0]
+            dy1 = pts[j, 1] - pts[i, 1]
+            for k in range(0, j):
+                dx2 = pts[k, 0] - pts[i, 0]
+                dy2 = pts[k, 1] - pts[i, 1]
+
+                if abs(dx2 * dy1 - dy2 * dx1) <= 1.19209e-07 * (abs(dx1) + abs(dy1) + abs(dx2) + abs(dy2)):
+                    return True
+    return False
 
 
 def plot_connections_one(img0, img1, pt, connected_pts, gt_cpt=None, show_text='', r=3):
@@ -136,6 +149,17 @@ def aug_matches_geo(matching_map, dist_map, pred_inliers0, pred_inliers1, gt_mat
             return aug_matches
 
     return aug_matches
+
+
+def compute_reprojection_error(pts0, pts1, E):
+    pts0_homo = np.concatenate([pts0, np.ones_like(pts0[:, :1])], axis=-1)
+    pts1_homo = np.concatenate([pts1, np.ones_like(pts1[:, :1])], axis=-1)
+
+    Ex0 = E @ pts0_homo.T  # [3, N]
+    Ex1 = (pts1_homo @ E).T  # [3, N]
+    demo = Ex0[0] ** 2 + Ex0[1] ** 2 + Ex1[0] ** 2 + Ex1[1] ** 2
+    err = np.diag((pts1_homo @ (E @ pts0_homo.T))) ** 2 / demo  # sampson error
+    return err
 
 
 def _homo(x):
@@ -322,34 +346,6 @@ def estimate_pose(kpts0, kpts1, K0, K1, norm_thresh, conf=0.99999, mask=None, me
     if len(kpts0) < 5:
         return None
 
-    # '''
-    # K = (K0 + K1) / 2.
-    # trans_pts0 = (kpts0 - K0[[0, 1], [2, 2]][None]) / K0[[0, 1], [0, 1]][None]
-    # trans_pts1 = (kpts1 - K1[[0, 1], [2, 2]][None]) / K1[[0, 1], [0, 1]][None]
-    # trans_pts0 = cv2.undistortPoints(kpts0, cameraMatrix=K0, distCoeffs=None)[:, 0, :]
-    # trans_pts1 = cv2.undistortPoints(kpts1, cameraMatrix=K1, distCoeffs=None)[:, 0, :]
-    # trans_pts0[:, 0] = trans_pts0[:, 0] * K[0, 0] + K[0, 2]
-    # trans_pts0[:, 1] = trans_pts0[:, 1] * K[1, 1] + K[1, 2]
-    # trans_pts1[:, 0] = trans_pts1[:, 0] * K[0, 0] + K[0, 2]
-    # trans_pts1[:, 1] = trans_pts1[:, 1] * K[1, 1] + K[1, 2]
-
-    # E0, E0_mask = cv2.findEssentialMat(points1=trans_pts0,
-    #                                    points2=trans_pts1,
-    #                                    cameraMatrix=K,
-    #                                    threshold=norm_thresh,
-    #                                    prob=conf,
-    #                                    mask=mask,
-    #                                    method=method)
-    # if E0 is None or E0.shape[0] != 3 or E0.shape[1] != 3:
-    #     return None
-    # '''
-    # F0, E0_mask = cv2.findFundamentalMat(points1=kpts0,
-    #                                      points2=kpts1,
-    #                                      method=method,
-    #                                      ransacReprojThreshold=3,
-    #                                      confidence=conf)
-    # E0 = K1.T @ F0 @ K0
-
     E1, E1_mask = cv2.findEssentialMat(points1=kpts0,
                                        points2=kpts1,
                                        cameraMatrix1=K0,
@@ -361,9 +357,6 @@ def estimate_pose(kpts0, kpts1, K0, K1, norm_thresh, conf=0.99999, mask=None, me
                                        mask=mask,
                                        method=method)
 
-    # E = E0
-    # E_mask = E0_mask
-    #
     E = E1
     E_mask = E1_mask
 
@@ -380,19 +373,9 @@ def estimate_pose(kpts0, kpts1, K0, K1, norm_thresh, conf=0.99999, mask=None, me
     mask[E_mask.ravel() > 0] = mask_P
     return E, R, t, E1_mask
 
-    # ret = cv2.recoverPose(E, kpts0, kpts1, np.eye(3), mask=E_mask)
-    # print('supp points: ', ret[0])
-    # if E_mask.shape[0] > 5:
-    # print('diff_mask: ', (E_mask.ravel() > 0) == (ret[3].ravel() > 0))
-    # if ret is not None:
-    #     return (E, ret[1], ret[2][:, 0], ret[3].ravel() > 0)
-    # else:
-    #     return None
-
 
 def sample_pose_v2(pts0, pts1, mscore, K0, K1, n_minium=5, n_hypothesis=64, error_th=1, method=cv2.RANSAC):
     K = (K0 + K1) / 2
-    # print('K: ', K.shape, K[0:2].shape, kpts0.shape, kpts0[None].shape)
 
     trans_pts0 = cv2.undistortPoints(pts0, cameraMatrix=K0, distCoeffs=None)[:, 0, :]
     trans_pts1 = cv2.undistortPoints(pts1, cameraMatrix=K1, distCoeffs=None)[:, 0, :]
@@ -516,8 +499,8 @@ def compute_epipolar_error_T(kpts0, kpts1, T_0to1, K0, K1):
     return d
 
 
-def matching_iterative_v5(data, model, pose_model, nI=9, error_th=10, conf_th=0.95, inlier_th=0.5, match_ratio=0.2,
-                          pose_hypothesis=0, stop_criteria={}, vis_matches=True, method=cv2.RANSAC, use_first=False,
+def matching_iterative_v5(data, model, nI=9, error_th=10, match_ratio=0.2,
+                          pose_hypothesis=0, stop_criteria={}, vis_matches=True, method=cv2.RANSAC,
                           topK=-1, aug_matches=False, use_refinement=True, min_kpts=0, save_root=None, save_fn=None):
     norm_pts0 = data['norm_pts0']
     norm_pts1 = data['norm_pts1']
@@ -738,6 +721,118 @@ def matching_iterative_v5(data, model, pose_model, nI=9, error_th=10, conf_th=0.
                             cv2.waitKey(0)
 
                     return output_indice0, mscores0_cpu, R, t, it + 1
+
+    indices0, indices1, mscores0, mscores1 = model.compute_matches(scores=pred_score, p=0.2)
+    indices0_cpu = indices0[0].cpu().numpy()
+    mscores0_cpu = mscores0[0].cpu().numpy()
+
+    return indices0_cpu, mscores0_cpu, None, None, nI
+
+
+def matching_iterative(data, model, nI, match_ratio, min_kpts, error_th, stop_criteria, method=cv2.USAC_MAGSAC):
+    pts0 = data['keypoints0']
+    pts1 = data['keypoints1']
+
+    if 'norm_keypoint0' in data.keys() and 'norm_keypoint1' in data.keys():
+        norm_kpts0 = data['norm_keypoints0']
+        norm_kpts1 = data['norm_keypoints1']
+    else:
+        norm_kpts0 = normalize_keypoints(kpts=pts0, image_shape=data['image0'].shape)
+        norm_kpts1 = normalize_keypoints(kpts=pts1, image_shape=data['image1'].shape)
+    scores0 = data['scores0']
+    scores1 = data['scores1']
+    desc0 = data['descriptors0']
+    desc1 = data['descriptors1']
+    desc0 = desc0.transpose(1, 2)
+    desc1 = desc1.transpose(1, 2)
+
+    pts0_cpu = data['pts0_cpu']
+    pts1_cpu = data['pts1_cpu']
+    img_color0 = data['image_color0']
+    img_color1 = data['image_color1']
+
+    K0 = data['K0']
+    K1 = data['K1']
+    T_0to1 = data['T_0to1']
+
+    last_best_R = None
+    last_best_t = None
+
+    valid_its = [3, 5, 7, 9, 11, 13, 14]
+
+    for it in range(nI):
+        if it == 0:
+            enc0, enc1 = model.encode_keypoint(norm_kpts0=norm_kpts0, norm_kpts1=norm_kpts1, scores0=scores0,
+                                               scores1=scores1)
+            desc0 = desc0 + enc0
+            desc1 = desc1 + enc1
+        desc0, desc1 = model.forward_one_layer(desc0=desc0, desc1=desc1, M0=None, M1=None, layer_i=it * 2)
+        desc0, desc1 = model.forward_one_layer(desc0=desc0, desc1=desc1, M0=None, M1=None, layer_i=it * 2 + 1)
+
+        # only perform pose estimation at specified layers
+        if it not in valid_its:
+            continue
+
+        pred_dist = model.compute_distance(desc0=desc0, desc1=desc1, layer_id=it)
+        pred_score = model.compute_score(dist=pred_dist, dustbin=model.bin_score,
+                                         iteration=model.sinkhorn_iterations)
+        indices0, indices1, mscores0, mscores1 = model.compute_matches(scores=pred_score, p=match_ratio)
+
+        if torch.sum(indices0 > -1) < min_kpts:
+            last_best_R = None
+            last_best_t = None
+            continue
+
+        indices0_cpu = indices0[0].cpu().numpy()
+        mscores0_cpu = mscores0[0].cpu().numpy()
+        pred_score_cpu = pred_score.cpu().numpy()[0, :-1, :-1]
+
+        matched_ids0 = [v for v in range(indices0_cpu.shape[0]) if
+                        indices0_cpu[v] > -1]
+        matched_ids1 = [indices0_cpu[v] for v in range(indices0_cpu.shape[0]) if
+                        indices0_cpu[v] > -1]
+        matched_score = [mscores0_cpu[v] for v in matched_ids0]
+
+        pred_matches = np.vstack([matched_ids0, matched_ids1]).transpose()
+        mscore = np.array(matched_score)
+
+        if pred_matches.shape[0] == 0:
+            continue
+
+        ret = estimate_pose(kpts0=pts0_cpu[pred_matches[:, 0]],
+                            kpts1=pts1_cpu[pred_matches[:, 1]],
+                            K0=K0, K1=K1,
+                            norm_thresh=error_th, method=method)
+
+        if ret is not None:
+            E, R, t, inliers = ret
+            error_t, error_R = compute_pose_error(T_0to1=T_0to1, R=R, t=t)
+            pose_inliers = inliers
+        else:
+            R, t = None, None
+            error_R, error_t = np.inf, np.inf
+            pose_inliers = np.array([False for v in range(pred_matches.shape[0])])
+        if it >= 1:
+            diff_R = angle_error_mat(R1=last_best_R,
+                                     R2=R) if last_best_R is not None and R is not None else np.inf
+            diff_t = angle_error_vec(v1=last_best_t,
+                                     v2=t) if last_best_t is not None and t is not None else np.inf
+        else:
+            diff_R, diff_t = np.inf, np.inf
+
+        pose_diff = np.max([diff_R, diff_t])
+        last_best_R = R
+        last_best_t = t
+
+        # Check if stop iteration
+        if 'pose' in stop_criteria.keys():
+            if pose_diff <= stop_criteria['pose']:
+                output_indice0 = np.zeros_like(indices0_cpu) - 1
+                output_indice0[pred_matches[pose_inliers, 0]] = pred_matches[pose_inliers, 1]
+
+                print('diff: ', diff_R, diff_t, np.sum(pose_inliers), pred_matches.shape[0])
+
+                return output_indice0, mscores0_cpu, R, t, it + 1
 
     indices0, indices1, mscores0, mscores1 = model.compute_matches(scores=pred_score, p=0.2)
     indices0_cpu = indices0[0].cpu().numpy()

@@ -5,24 +5,30 @@
 @Author fx221@cam.ac.uk
 @Date   24/03/2023 16:01
 =================================================='''
-import os.path as osp
 import torch
 import yaml
 import numpy as np
-from copy import deepcopy
+import cv2
+import os.path as osp
+import argparse
 from tqdm import tqdm
 import torch.utils.data as Data
 from components.readers import standard_reader
 from components.evaluators import auc_eval
-from nets.superglue import SuperGlue
-from nets.gm import GM
 from nets.gms import DGNNS
 from nets.adgm import AdaGMN
-from eval.eval_yfcc_full import evaluate_full
 from components.utils.evaluation_utils import normalize_intrinsic
 from components.utils.metrics import compute_epi_inlier
-from tools.utils import compute_pose_error, compute_epipolar_error, error_colormap, pose_auc
+from tools.utils import compute_pose_error, pose_auc
 from tools.utils import estimate_pose_m_v2
+from eval.matching import matching_iterative_v5, matching_iterative
+
+parser = argparse.ArgumentParser(description='IMP', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--matching_method', type=str, default='IMP')
+parser.add_argument('--dataset', type=str, default='scannet')
+parser.add_argument('--feature_type', type=str, default='spp')
+parser.add_argument('--use_sinkhorn', action='store_true', default=True)
+parser.add_argument('--use_iterative', action='store_true', default=False)
 
 
 def eval(model):
@@ -85,24 +91,16 @@ def eval(model):
         }
 
         if use_iterative:
-            matches, conf, pred_R, pred_t, ni = matching_iterative_v5(
+            # matches, conf, pred_R, pred_t, ni = matching_iterative_v5(
+            matches, conf, pred_R, pred_t, ni = matching_iterative(
                 nI=nI,
                 data=feed_data,
                 model=model,
-                pose_model=pose_net,
                 error_th=error_th,
-                conf_th=conf_th,
-                inlier_th=inlier_th,
                 stop_criteria=stop_criteria,
-                vis_matches=vis_matches,
-                pose_hypothesis=pose_hypothesis,
-                match_ratio=match_ratio,
-                method=method,
-                use_first=use_first,
-                topK=topK,
-                aug_matches=aug_matches,
-                use_refinement=use_refinement,
-                min_kpts=min_kpts,
+                match_ratio=0.1,
+                method=cv2.USAC_MAGSAC,
+                min_kpts=25,
             )
 
             valid = (matches > -1)
@@ -126,7 +124,7 @@ def eval(model):
 
             if pred_R is None:
                 print('pred_R is None')
-                ret = estimate_pose_m_v2(mkpts0, mkpts1, K0, K1, error_th, method=method)
+                ret = estimate_pose_m_v2(mkpts0, mkpts1, K0, K1, error_th, method=cv2.USAC_MAGSAC)
                 if ret is None:
                     err_t, err_R = np.inf, np.inf
                 else:
@@ -146,7 +144,6 @@ def eval(model):
             pred_t = None
             # match_out = net.produce_matches_test_R50(data={
             match_out = net.produce_matches(data={
-                # match_out = net.forward_train(data={
                 'keypoints0': torch.from_numpy(pts0).cuda().float()[None],
                 'keypoints1': torch.from_numpy(pts1).cuda().float()[None],
 
@@ -162,9 +159,9 @@ def eval(model):
                 # 'matching_mask': torch.randint(0, 1, size=(2001, 2001)).cuda()[None]
             },
                 p=0.2,
-                only_last=False,
-                mscore_th=0.1,
-                uncertainty_ratio=1.,
+                only_last=True,
+                # mscore_th=0.1,
+                # uncertainty_ratio=1.,
             )
             indices0 = match_out['indices0']
             mscores0 = match_out['mscores0']
@@ -201,7 +198,7 @@ def eval(model):
             matching_score = num_correct / len(pts0) if len(pts0) > 0 else 0
             precision = np.mean(correct) if len(correct) > 0 else 0
 
-            ret = estimate_pose_m_v2(mkpts0, mkpts1, K0, K1, error_th, method=method)
+            ret = estimate_pose_m_v2(mkpts0, mkpts1, K0, K1, error_th, method=cv2.USAC_MAGSAC)
             # ret = estimate_pose_m(mkpts0, mkpts1, K0, K1, error_th, method=method)
 
             if ret is None:
@@ -233,13 +230,13 @@ def eval(model):
 
 
 if __name__ == '__main__':
-    feat = 'spp'
-    # dataset = 'yfcc'
-    dataset = 'scannet'
-    use_iterative = False
-    with_sinkhorn = True
-    # matching_method = 'SuperGlue'
-    matching_method = 'IMP'
+    args = parser.parse_args()
+    feat = args.feature_type
+    dataset = args.dataset
+    use_iterative = args.use_iterative
+    with_sinkhorn = args.use_sinkhorn
+    matching_method = args.matching_method
+    # matching_method = 'IMP'
     # matching_method = 'IMP_geo'
     # matching_method = 'EIMP'
     # matching_method = 'EIMP_geo'
@@ -249,14 +246,12 @@ if __name__ == '__main__':
         else:
             config_path = 'configs/scannet_eval_gm_sift.yaml'
         error_th = 3
-        # sh_its = 20
     elif dataset == 'yfcc':
         if feat == 'spp':
             config_path = 'configs/yfcc_eval_gm.yaml'
         else:
             config_path = 'configs/yfcc_eval_gm_sift.yaml'
         error_th = 1
-        # sh_its = 20
     with open(config_path, 'r') as f:
         config = yaml.load(f, yaml.Loader)
         read_config = config['reader']
@@ -311,28 +306,13 @@ if __name__ == '__main__':
             }
         }
     }
-
-    '''
-    if matching_method == 'IMP_geo':
-        net = DGNNS(config=config)
-        weight_path = '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.185.pth'  # scannet
-        # weight_path = '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.190.pth' # yfcc
-        
-        # weight_path = '2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth'
-        # weight_path = '2022_09_24_12_59_29_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.125.pth'
-
-    elif matching_method == 'EIMP_geo':
-        net = AdaGMN(config=config)
-        # weight_path = '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.45.pth' # yfcc
-
-        weight_path = '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.75.pth'  # scannet only
-    '''
     net = model_dict[matching_method]['network']
     weight_path = model_dict[matching_method]['weight'][dataset]
     weight_root = '/scratches/flyer_3/fx221/exp/pnba/'
     net.load_state_dict(state_dict=torch.load(osp.join(weight_root, weight_path))['model'], strict=True)
     net = net.cuda().eval()
 
-    reults = eval(model=net)
+    with torch.no_grad():
+        reults = eval(model=net)
 
     print('Results of model {} on {} dataset with iterative {}'.format(matching_method, dataset, use_iterative))

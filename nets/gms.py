@@ -45,7 +45,7 @@ class DGNNS(GM):
         self.last_cross_packs0 = None
         self.last_cross_packs1 = None
 
-    def produce_matches(self, data, p=0.2, test_it=-1, only_last=False, **kwargs):
+    def produce_matches(self, data, p=0.2, only_last=False, **kwargs):
         """Run SuperGlue on a pair of keypoints and descriptors"""
         desc0, desc1 = data['descriptors0'], data['descriptors1']
         kpts0, kpts1 = data['keypoints0'], data['keypoints1']
@@ -95,9 +95,6 @@ class DGNNS(GM):
 
         nI = self.config['n_layers']
 
-        if test_it >= 1 and test_it <= nI:
-            nI = test_it
-
         for ni in range(nI):
             layer = self.gnn.layers[ni * 2]
             delta0 = layer(desc0, desc0,
@@ -146,6 +143,18 @@ class DGNNS(GM):
                     indices0, indices1, mscores0, mscores1 = self.compute_matches(scores=pred_score, p=p)
                     all_indices0.append(indices0)
                     all_mscores0.append(mscores0)
+            else:
+                mdesc0 = self.final_proj[ni](desc0)
+                mdesc1 = self.final_proj[ni](desc1)
+
+                dist = torch.einsum('bdn,bdm->bnm', mdesc0, mdesc1)
+                dist = dist / self.config['descriptor_dim'] ** .5
+                pred_score = self.compute_score(dist=dist, dustbin=self.bin_score,
+                                                iteration=self.sinkhorn_iterations)
+
+                indices0, indices1, mscores0, mscores1 = self.compute_matches(scores=pred_score, p=p)
+                all_indices0.append(indices0)
+                all_mscores0.append(mscores0)
 
         out = {
             'indices0': all_indices0,
@@ -180,6 +189,38 @@ class DGNNS(GM):
             self.self_prob1 = layer.prob
 
         return desc0 + delta0, desc1 + delta1
+
+    def run(self, data):
+        # used for evaluation
+        desc0 = data['desc1']
+        desc1 = data['desc2']
+        kpts0 = data['x1'][:, :, :2]
+        kpts1 = data['x2'][:, :, :2]
+        scores0 = data['x1'][:, :, -1]
+        scores1 = data['x2'][:, :, -1]
+
+        out = self.produce_matches(
+            data={
+                'descriptors0': desc0,
+                'descriptors1': desc1,
+                'norm_keypoints0': kpts0,
+                'norm_keypoints1': kpts1,
+                'scores0': scores0,
+                'scores1': scores1,
+            },
+            p=self.config['match_threshold'],
+            only_last=True,
+        )
+        # out = self.produce_matches(data=data)
+        indices0 = out['indices0'][-1][0]
+        # indices1 = out['indices0'][-1][0]
+        index0 = torch.where(indices0 >= 0)[0]
+        index1 = indices0[index0]
+
+        return {
+            'index0': index0,
+            'index1': index1,
+        }
 
     def pool(self, **kwargs):
         return None, None
