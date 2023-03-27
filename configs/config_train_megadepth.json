@@ -1,16 +1,18 @@
 {
   "name": "IMP",
   "dataset": "megadepth",
-  "network_2": "gm",
-  "network_6": "dgnns",
-  "network_": "adagmn",
+  "network_0": "gm",
+  "network": "dgnns",
+  "network_2": "adagmn",
   "gpu": [
-    0
+    0,
+    1,
+    2,
+    3
   ],
   "feature": "spp",
   "save_path": "/scratches/flyer_3/fx221/exp/imp",
   "base_path": "/scratches/flyer_3/fx221/dataset/Megadepth",
-  "scene_info_path": "fx221/dataset/Megadepth/scene_info",
   "scene_list_fn": "/home/mifs/fx221/Research/Code/pnba/assets/megadepth_train_scenes.txt",
   "scene_list_fn_validation": "/home/mifs/fx221/Research/Code/pnba/assets/megadepth_test_scenes.txt",
   "min_overlap_ratio": 0.1,
@@ -34,7 +36,7 @@
   "optim": "adam",
   "optim_": "adamw",
   "workers": 16,
-  "layers": 9,
+  "layers": 15,
   "epochs": 10000,
   "its_per_epoch": 1000,
   "decay_rate": 0.999992,

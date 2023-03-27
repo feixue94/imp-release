@@ -138,7 +138,7 @@ def eval(model):
                 if ret is None:
                     err_t, err_R = np.inf, np.inf
                 else:
-                    pred_R, pred_t, inliers = ret
+                    pred_E, pred_R, pred_t, inliers = ret
                     if pred_R is not None:
                         R = pred_R
                         t = pred_t
@@ -152,7 +152,6 @@ def eval(model):
         else:
             pred_R = None
             pred_t = None
-            # match_out = net.produce_matches_test_R50(data={
             match_out = net.produce_matches(data={
                 'keypoints0': torch.from_numpy(pts0).cuda().float()[None],
                 'keypoints1': torch.from_numpy(pts1).cuda().float()[None],
@@ -205,7 +204,7 @@ def eval(model):
             if ret is None:
                 err_t, err_R = np.inf, np.inf
             else:
-                R, t, inliers = ret
+                E, R, t, inliers = ret
                 if pred_R is not None:
                     R = pred_R
                     t = pred_t

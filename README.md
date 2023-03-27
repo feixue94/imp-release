@@ -24,8 +24,11 @@ instance-wise feature detection and matching to enhance the localization accurac
 
 ## Data preparation
 
-Please download the training dataset of Megadepth following the instructions provided by [SuperGlue](). The data
-structure of Megadepth should be like this:
+Please download the training dataset of Megadepth following the instructions given
+by [d2net](https://github.com/mihaidusmanu/d2-net/tree/dev). D2Net provided the preprocessed sfm models and undistorted
+images on goole drive, but it is not working now, so you have to preprocess the Megadepth dataset on your own.
+
+The data structure of Megadepth should be like this:
 
 ```
 - Megadepth
@@ -58,58 +61,43 @@ The data structure of generated samples for training should like this:
             - 0.npy
 ```
 
-## Pretrained weights
-
-We provide pretrained weights for local feature detection and extraction, global instance recognition for Aachen_v1.1
-and RobotCar-Seasons datasets, respectively, which can be downloaded
-from [here](https://drive.google.com/file/d/1N4j7PkZoy2CkWhS7u6dFzMIoai3ShG9p/view?usp=sharing)
-
-## Localization with global instances
-
-Once you have the global instance masks of the query and database images and the 3D map of the scene, you can run the
-following commands for localization.
-
-* localization on Aachen_v1.1
-
-```
-./run_loc_aachn
-```
-
-you will get results like this:
-
-|          | Day  | Night       | 
-| -------- | ------- | -------- |
-| cvpr | 89.1 / 96.1 / 99.3 | 77.0 / 90.1 / 99.5  |
-| post-cvpr | 88.8 / 95.8 / 99.2 | 75.4 / 91.6 / 100 |
-
-* localization on RobotCar-Seasons
-
-```
-./run_loc_robotcar
-```
-
-you will get results like this:
-
-|        | Night  | Night-rain       | 
-| -------- | ----- | ------- |
-| cvpr | 24.9 / 62.3 / 86.1 | 47.5 / 73.4 / 90.0  |
-| post-cvpr | 28.1 / 66.9 / 91.8 | 46.1 / 73.6 / 92.5 |
+Instead of generating training samples offline, you can also do it online and adopt augmentations (e.g. perspective
+transformation, illumination changes) to further improve the ability of the model.
 
 ## Training
 
-If you want to retrain the recognition network, you can run the following commands.
-
-* training recognition on Aachen_v1.1
-
-```
-./train_aachen
-```
-
-* training recognition on RobotCar-Seasons
+Please modify <em> save_path </em> and <em> base_path </em> in configs/config_train_megadepth.json. Then start the
+training as:
 
 ```
-./train_robotcar
+python3 train.py --config configs/config_train_megadepth.json
 ```
+
+It requires 4 2080ti/1080ti gpus or 2 3090 gpus for batch size of 16.
+
+## Results
+
+1. Download the pretrained weights
+   from [here](https://drive.google.com/drive/folders/1pI8_jnVhVX7BWa7M6H1s3GQgxrTwMncy?usp=sharing) and put them in
+   the <em> weights </em> directory.
+
+2. Prepare the testing data from YFCC and Scannet datasets. Download YFCC dataset:
+
+```
+   bash download_data.sh raw_data raw_data_yfcc.tar.gz 0 8
+   tar -xvf raw_data_yfcc.tar.gz
+```
+
+Download preprocess Scannet evaluation data
+from [here](https://drive.google.com/file/d/14s-Ce8Vq7XedzKon8MZSB_Mz_iC6oFPy/view)
+
+3. Run the following the command for evaluation:
+
+```
+python3 -m eval.eval_imp --matching_method IMP --dataset yfcc
+```
+
+You will get results like this:
 
 ## BibTeX Citation
 
@@ -118,7 +106,7 @@ If you use any ideas from the paper or code from this repo, please consider citi
 ```
 @inproceedings{xue2022imp,
   author    = {Fei Xue and Ignas Budvytis and Roberto Cipolla},
-  title     = {Efficient Large-scale Localization by Global Instance Recognition},
+  title     = {IMP: Iterative Matching and Pose Estimation with Adaptive Pooling},
   booktitle = {CVPR},
   year      = {2023}
 }
@@ -127,6 +115,5 @@ If you use any ideas from the paper or code from this repo, please consider citi
 ## Acknowledgements
 
 Part of the code is from previous excellent works
-including [SuperPoint](https://github.com/magicleap/SuperPointPretrainedNetwork), [R2D2](https://github.com/naver/r2d2)
-, [HLoc](https://github.com/cvg/Hierarchical-Localization). You can find more details from their released repositories
-if you are interested in their works. 
+including [SuperPoint](https://github.com/magicleap/SuperPointPretrainedNetwork), [SuperGlue]() and [SGMNet](). You can
+find more details from their released repositories if you are interested in their works. 

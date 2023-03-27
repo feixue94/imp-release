@@ -112,4 +112,4 @@ def estimate_pose(kpts0, kpts1, K0, K1, norm_thresh, conf=0.99999, method=cv2.RA
 
     mask = E_mask.ravel() >= 0
     mask[E_mask.ravel() > 0] = mask_P
-    return R, t, mask
+    return E, R, t, mask
