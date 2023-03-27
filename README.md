@@ -81,15 +81,46 @@ It requires 4 2080ti/1080ti gpus or 2 3090 gpus for batch size of 16.
    from [here](https://drive.google.com/drive/folders/1pI8_jnVhVX7BWa7M6H1s3GQgxrTwMncy?usp=sharing) and put them in
    the <em> weights </em> directory.
 
-2. Prepare the testing data from YFCC and Scannet datasets. Download YFCC dataset:
+2. Prepare the testing data from YFCC and Scannet datasets.
+
+- Download YFCC dataset:
 
 ```
    bash download_data.sh raw_data raw_data_yfcc.tar.gz 0 8
    tar -xvf raw_data_yfcc.tar.gz
+   
 ```
 
-Download preprocess Scannet evaluation data
-from [here](https://drive.google.com/file/d/14s-Ce8Vq7XedzKon8MZSB_Mz_iC6oFPy/view)
+- Update the following entries in **dump/configs/yfcc_sp.yaml** and **dump/configs/yfcc_root.yaml**
+    - [ ] **rawdata_dir**: path for yfcc rawdata
+    - [ ] **feature_dump_dir**: dump path for extracted features
+    - [ ] **dataset_dump_dir**: dump path for generated dataset
+    - [ ] **extractor**: configuration for keypoint extractor
+
+```
+cd dump
+python3 dump.py --config_path configs/yfcc_sp.yaml
+```
+
+You will generate a hdf5 (**yfcc_sp_2000.hdf5**) file at **dataset_dump_dir**. Please also update the **rawdata_dir**
+and **dataset_dir** in **configs/yfcc_eval_gm.yaml** and **configs/yfcc_eval_gm_sift.yaml** for evaluation.
+
+- Download the preprocessed Scannet evaluation data
+  from [here](https://drive.google.com/file/d/14s-Ce8Vq7XedzKon8MZSB_Mz_iC6oFPy/view)
+
+- Update the following entries in **dump/configs/scannet_sp.yaml** and **dump/configs/scannet_root.yaml**
+    - [ ] **rawdata_dir**: path for yfcc rawdata
+    - [ ] **feature_dump_dir**: dump path for extracted features
+    - [ ] **dataset_dump_dir**: dump path for generated dataset
+    - [ ] **extractor**: configuration for keypoint extractor
+
+```
+cd dump
+python3 dump.py --config_path configs/scannet_sp.yaml
+```
+
+You will generate a hdf5 (**scannet_sp_1000.hdf5**) file at **dataset_dump_dir**. Please also update the **rawdata_dir**
+and **dataset_dir** in **configs/scannet_eval_gm.yaml** and **configs/scannet_eval_gm_sift.yaml** for evaluation.
 
 3. Run the following the command for evaluation:
 

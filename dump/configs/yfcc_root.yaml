@@ -1,0 +1,15 @@
+data_name: yfcc
+rawdata_dir: /yfcc_rawdata
+feature_dump_dir: yfcc_test_root
+dataset_dump_dir: yfcc_test_root
+data_split: ['test']
+data_seq: ['buckingham_palace', 'notre_dame_front_facade', 'reichstag', 'sacre_coeur']
+
+extractor:
+  name: root #root or sp
+  num_kpt: 2000
+  resize: [-1] 
+  overwrite: False
+  extract: True
+  num_process: 4
+  det_th: 0.00001
