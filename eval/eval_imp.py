@@ -274,30 +274,56 @@ if __name__ == '__main__':
     model_dict = {
         'IMP_geo': {
             'network': DGNNS(config=config),
+
             'weight': {
-                'scannet': '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.185.pth',
-                'yfcc': '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.190.pth',
-            }
+                'spp': {
+                    'scannet': '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.185.pth',
+                    'yfcc': '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.190.pth',
+                },
+                'sift': {
+                    'scannet': '2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth',
+                    'yfcc': '2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth',
+                },
+            },
         },
         'IMP': {
             'network': DGNNS(config=config),
+
             'weight': {
-                'scannet': '2022_07_15_13_49_43_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/dgnns.885.pth',
-                'yfcc': '2022_07_15_13_49_43_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/dgnns.885.pth',
+                'spp': {
+                    'scannet': '2022_07_15_13_49_43_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/dgnns.885.pth',
+                    'yfcc': '2022_07_15_13_49_43_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/dgnns.885.pth',
+                },
+                'sift': {
+                    'scannet': '2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth',
+                    'yfcc': '2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth',
+                },
             }
         },
         'EIMP': {
             'network': AdaGMN(config=config),
             'weight': {
-                'scannet': '2022_10_06_15_06_23_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/adagmn.100.pth',
-                'yfcc': '2022_10_06_15_06_23_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/adagmn.100.pth',
+                'spp': {
+                    'scannet': '2022_10_06_15_06_23_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/adagmn.100.pth',
+                    'yfcc': '2022_10_06_15_06_23_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/adagmn.100.pth',
+                },
+                'sift': {
+                    'scannet': '2022_10_06_14_43_52_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/adagmn.110.pth',
+                    'yfcc': '2022_10_06_14_43_52_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/adagmn.110.pth',
+                },
             }
         },
         'EIMP_geo': {
             'network': AdaGMN(config=config),
             'weight': {
-                'scannet': '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.75.pth',
-                'yfcc': '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.45.pth',
+                'spp': {
+                    'scannet': '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.75.pth',
+                    'yfcc': '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.45.pth',
+                },
+                'sift': {
+                    'scannet': '2022_10_06_14_43_52_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/adagmn.110.pth',
+                    'yfcc': '2022_10_06_14_43_52_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/adagmn.110.pth',
+                },
             }
         }
     }
