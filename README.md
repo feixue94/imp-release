@@ -4,10 +4,14 @@
   <img src="assets/overview.png" width="960">
 </p>
 
-In this work, we propose to leverage global instances, which are robust to illumination and season changes for both
-coarse and fine localization. For coarse localization, instead of performing global reference search directly, we search
-for reference images from recognized global instances progressively. The recognized instances are further utilized for
-instance-wise feature detection and matching to enhance the localization accuracy.
+In this paper we propose an iterative matching and pose estimation framework (IMP) leveraging the geometric connections between the two
+tasks: a few good matches are enough for a roughly accurate pose estimation; a roughly accurate pose can be used to
+guide the matching by providing geometric constraints. To this end, we implement a geometry-aware recurrent
+attention-based module which jointly outputs sparse matches and camera poses. Specif- ically, for each iteration, we
+first implicitly embed geometric information into the module via a pose-consistency loss, allowing it to predict
+geometry-aware matches progressively. Second, we introduce an efficient IMP, called EIMP, to dynamically discard
+keypoints without potential matches, avoiding redundant updating and significantly reducing the quadratic time
+complexity of attention computation in transformers.
 
 * Full paper PDF: [IMP: Iterative Matching and Pose Estimation with Adaptive Pooling](https://arxiv.org/abs/1911.11763).
 
@@ -133,11 +137,9 @@ You will get results like this on YFCC dataset:
 |       Model  | @5  | @10       | @20 |  
 | -------- | -------- | ----- | ------- |  
 | imp | 38.45 | 58.52 | 74.67  |  
-| imp_iterative | 39.4 | 59.62	| 75.28  |   
+| imp_iterative | 39.4 | 59.62    | 75.28  |   
 |eimp | 36.96 | 56.76| 73.29 |  
-|eimp_iterative | 38.98	| 58.95	| 74.81|  
-
-
+|eimp_iterative | 38.98    | 58.95    | 74.81|  
 
 ## BibTeX Citation
 
