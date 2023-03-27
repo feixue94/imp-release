@@ -97,27 +97,6 @@ def attention(query, key, value):
     return torch.einsum('bhnm,bdhm->bdhn', prob, value), prob
 
 
-# class MultiHeadedAttention(nn.Module):
-#     """ Multi-head attention to increase model expressivitiy """
-#
-#     def __init__(self, num_heads: int, d_model: int):
-#         super().__init__()
-#         assert d_model % num_heads == 0
-#         self.dim = d_model // num_heads
-#         self.num_heads = num_heads
-#         self.merge = nn.Conv1d(d_model, d_model, kernel_size=1)
-#         self.proj = nn.ModuleList([deepcopy(self.merge) for _ in range(3)])
-#
-#     def forward(self, query, key, value, M=None):
-#         batch_dim = query.size(0)
-#         query, key, value = [l(x).view(batch_dim, self.dim, self.num_heads, -1)
-#                              for l, x in zip(self.proj, (query, key, value))]
-#         x, prob = attention(query, key, value)
-#
-#         self.prob = torch.mean(prob, dim=1, keepdim=False)
-#         return self.merge(x.contiguous().view(batch_dim, self.dim * self.num_heads, -1))
-
-
 class MultiHeadedAttention(nn.Module):
     def __init__(self, num_heads: int, d_model: int):
         super().__init__()
@@ -142,38 +121,10 @@ class MultiHeadedAttention(nn.Module):
         dim = query.shape[1]
         scores = torch.einsum('bdhn,bdhm->bhnm', query, key) / dim ** .5
 
-        # print('query: ', query[0, 0, 0, :5])
-        # print('key: ', key[0, 0, 0, :5])
-        # print('value: ', value[0, 0, 0, :5])
-        # print('scores: ', scores[0, 0, :5, :5])
-
         if M is not None:
-            # print('M: ', scores.shape, M.shape, torch.sum(M, dim=2))
-            # scores = scores * M[:, None, :, :].expand_as(scores)
-            # with torch.no_grad():
             mask = (1 - M[:, None, :, :]).repeat(1, scores.shape[1], 1, 1).bool()  # [B, H, N, M]
             scores = scores.masked_fill(mask, -torch.finfo(scores.dtype).max)
             prob = F.softmax(scores, dim=-1)  # * (~mask).float()  # * mask.float()
-            # prob = prob * ones
-            # prob = prob.masked_fill(mask, 0.)
-
-            # print('before mask 0: ', torch.sum(prob[0, 0], dim=-1)[:5])
-            # prob[mask] = 0
-            # print('after mask 0: ', torch.sum(prob[0, 0], dim=-1)[:5])
-
-            # print('using mask...')
-            # print('mask: ', torch.where(M > 0)[1], torch.where(M > 0)[2])
-            #
-            # print('prob w/m: ', prob[:, :, 3, 3], torch.min(prob), torch.max(prob))
-            # sids0 = torch.unique(torch.where(M > 0)[1])
-            # sids1 = torch.unique(torch.where(M > 0)[2])
-            # print('sids: ', sids0.shape, sids1.shape)
-            # s = scores[:, :, sids0, :][:, :, :, sids1]
-            # p = F.softmax(s, dim=-1)
-            # print('prob w/o m: ', p[:, :, 0, 0])
-            # print(M.shape, scores.shape, prob.shape, p.shape, torch.min(p), torch.max(p))
-            # print('max: ', torch.sum(prob, dim=1).sum(dim=1)[:, sids1], torch.sum(p, dim=1).sum(dim=1))
-            # exit(0)
         else:
             prob = F.softmax(scores, dim=-1)
 
@@ -264,24 +215,6 @@ class SharedAttentionalPropagation(nn.Module):
             message = self.merge(message.contiguous().view(batch_dim, self.dim * self.num_heads, -1))
             self.prob = prob
             y = torch.cat([x, message], dim=1)
-
-            # out = self.mlp(torch.cat([x, message], dim=1))
-
-        # print('after mlp: ', self.sharing_attention, out[0, :-3, 0:5], x[0, :-3, 0:5], message[0, :-3, 0:5])
-        # print('mlp weights: ', self.mlp.state_dict())
-
-        '''
-        if M is None:
-            return self.mlp(y)
-        else:
-            with torch.no_grad():
-                sids0 = torch.where(torch.sum(M, dim=-1) > 0)[1]
-            out = torch.zeros(size=(y.shape[0], self.feature_dim, y.shape[-1]), dtype=y.dtype, device=y.device)
-            # sids1 = torch.where(torch.sum(M, dim=-1) == 0)[1]
-            out[:, :, sids0] = self.mlp(y[:, :, sids0])
-            # out[:, :, sids1] = self.mlp(y[:, :, sids1])
-            return out
-        '''
         return self.mlp(y)
 
 

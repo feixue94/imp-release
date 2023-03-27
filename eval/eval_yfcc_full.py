@@ -39,9 +39,6 @@ def feed_match_v2(info, model, p_th=0.2):
         norm_x1, norm_x2 = evaluation_utils.normalize_size(test_data['x1'][:, :2], test_data['size1'], scale=0.7), \
                            evaluation_utils.normalize_size(test_data['x2'][:, :2], test_data['size2'], scale=0.7)
 
-        # print('x1: ', test_data['x1'][:, :2])
-        # print('norm_x1: ', norm_x1)
-        # print('size1: ', test_data['size1'])
         norm_x1, norm_x2 = np.concatenate([norm_x1, test_data['x1'][:, 2, np.newaxis]], axis=-1), \
                            np.concatenate([norm_x2, test_data['x2'][:, 2, np.newaxis]], axis=-1)
         feed_data = {'x1': torch.from_numpy(norm_x1[np.newaxis]).cuda().float(),
@@ -71,12 +68,10 @@ def feed_match_v2(info, model, p_th=0.2):
         }
         if 'pred_pose' in res.keys():
             out['pred_pose'] = res['pred_pose']
-        # return [corr1, corr2]
         return out
 
 
 def reader_handler(reader, read_que):
-    # reader = load_component('reader', config['name'], config)
     for index in range(len(reader)):
         index += 0
         info = reader.run(index)
@@ -123,27 +118,17 @@ def evaluate_full(model, opt, feat_type='spp', dataset='yfcc', max_length=None, 
 
     if max_keypoints > 0:
         read_config['num_kpt'] = max_keypoints
-    # reader = load_component('reader', read_config['name'], read_config)
     reader = standard_reader(config=read_config)
     reader_loader = Data.DataLoader(dataset=reader, num_workers=4, shuffle=False)
     matcher = feed_match_v2
-    # evaluator = load_component('evaluator', eval_config['name'], eval_config)
-
-    if dataset == 'fm':
-        evaluator = FMbench_eval(config=eval_config)
-    else:
-        evaluator = auc_eval(config=eval_config)
+    evaluator = auc_eval(config=eval_config)
 
     # results = {}
     for index in tqdm(range(len(reader_loader)), total=len(reader)):
-        # index += 0
         if max_length is not None:
             if index >= max_length:
                 break
         info = reader.run(index)
-        # corr1, corr2 = matcher(info=info, model=model, p_th=0.2)
-        # cur_res = evaluator.run({**info, **{'corr1': corr1, 'corr2': corr2}}, th=th)
-
         match_out = matcher(info=info, model=model, p_th=0.2)
         if 'pred_pose' in match_out.keys():
             if match_out['pred_pose'] is not None:
@@ -153,11 +138,6 @@ def evaluate_full(model, opt, feat_type='spp', dataset='yfcc', max_length=None, 
         cur_res = evaluator.run({**info, **match_out}, th=th)
 
         evaluator.res_inqueue(res=cur_res)
-
-        # break
-        # if index >= 20:
-        #     break
-
     reader.close()
     output = evaluator.parse()
     aucs = output['exact_auc']
@@ -193,8 +173,6 @@ def evaluate_full(model, opt, feat_type='spp', dataset='yfcc', max_length=None, 
 
 
 def match_handler(matcher, read_que, match_que):
-    # matcher = load_component('matcher', config['name'], config)
-    # match_func = functools.partial(feed_match, matcher=matcher)
     match_func = functools.partial(feed_match_v2, model=matcher)
     pool = Pool(4)
     cache = []
@@ -240,11 +218,4 @@ def evaluate_handler(evaluator, match_que, num_pair):
             for cur_res in results:
                 evaluator.res_inqueue(cur_res)
             cache = []
-        # if args.vis_folder is not None:
-        # dump visualization
-        # corr1_norm, corr2_norm = evaluation_utils.normalize_intrinsic(item['corr1'], item['K1']), \
-        #                          evaluation_utils.normalize_intrinsic(item['corr2'], item['K2'])
-        # inlier_mask = metrics.compute_epi_inlier(corr1_norm, corr2_norm, item['e'], config['inlier_th'])
-        # display = evaluation_utils.draw_match(item['img1'], item['img2'], item['corr1'], item['corr2'], inlier_mask)
-        # cv2.imwrite(os.path.join(args.vis_folder, str(item['index']) + '.png'), display)
     evaluator.parse()

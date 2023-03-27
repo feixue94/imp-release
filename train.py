@@ -20,12 +20,11 @@ import os
 import os.path as osp
 import torch
 import torch.utils.data as Data
-from nets.superglue import SuperGlue
 from nets.gm import GM
 from nets.adgm import AdaGMN
 from nets.gms import DGNNS
 from trainer import Trainer
-from dataset.megadepth import Megadepth, read_matches
+from dataset.megadepth import Megadepth
 from tools.common import torch_set_gpu
 import torch.multiprocessing as mp
 import torch.distributed as dist
@@ -126,18 +125,8 @@ if __name__ == '__main__':
         # for adaptive pooling
         'n_min_tokens': args.n_min_tokens,
 
-        # for pose estimator
-        # 'with_pose': (args.with_pose > 0),
-        # 'n_hypothesis': args.n_hypothesis,
-        # 'error_th': args.error_th,
-        # 'inlier_th': args.inlier_th,
-        # 'pose_type': 'H' if args.dataset == 'mscoco' else 'F',
-        # 'minium_samples': 4 if args.dataset == 'mscoco' else 8,
-
     }
 
-    # if args.network == 'superglue':
-    #     model = SuperGlue(config.get('matcher', {}))
     if args.network == 'gm':
         model = GM(config)
     elif args.network == 'dgnns':

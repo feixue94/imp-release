@@ -8,7 +8,6 @@
 import numpy as np
 import cv2
 import torch
-from tools.utils import compute_epipolar_error
 from tools.utils import to_homogeneous
 import math
 
@@ -162,22 +161,6 @@ def match_from_projection(
 
     if not cycle_check:
         return inlier_matches12, outlier_matches12
-
-    # do cycle reprojection
-    # proj_uv21 = reproject(pos1=pos2, depth1=depth2, intrinsics1=intrinsics2, pose1=pose2, bbox1=bbox2,
-    #                       intrinsics2=intrinsics1, pose2=pose1, bbox2=bbox1)  # [2, M]
-    # proj_uv21_ext = proj_uv21[:, :, None].repeat(N, axis=2)
-    # pos1_ext = pos1[:, None, :].repeat(M, axis=1)
-    # error_uv21 = proj_uv21_ext - pos1_ext
-    # error_uv21 = np.sqrt(np.sum(error_uv21 ** 2, axis=0))
-    # matches_21 = np.argmin(error_uv21, axis=1)
-    # errors_21 = error_uv21[np.arange(error_uv21.shape[0]), matches_21]
-    # inlier_ids21 = np.where(errors_21 <= inlier_th)
-
-    # print('inliers: ', inlier_ids12, len(inlier_ids21))
-
-    # do cycle reprojection
-    # print('matches: ', inlier_matches12.shape, pos1.shape, pos2.shape)
     matched_pos1 = pos1[:, inlier_matches12[:, 0]]
     matched_pos2 = pos2[:, inlier_matches12[:, 1]]
 
@@ -190,9 +173,6 @@ def match_from_projection(
     inlier_cycle = inlier_matches12[inliers21]
     outlier_cycle = np.vstack([inlier_matches12[~inliers21], outlier_matches12])
 
-    # print('inliers: ', inlier_matches12.shape, np.sum(inliers21), inlier_cycle.shape, outlier_matches12.shape,
-    #       outlier_cycle.shape)
-    # return inlier_matches12, outlier_matches12
     return inlier_cycle, outlier_cycle
 
 
@@ -224,21 +204,6 @@ def match_from_projection_points(
     if not cycle_check:
         return inlier_matches12, outlier_matches12
 
-    # do cycle reprojection
-    # proj_uv21 = reproject(pos1=pos2, depth1=depth2, intrinsics1=intrinsics2, pose1=pose2, bbox1=bbox2,
-    #                       intrinsics2=intrinsics1, pose2=pose1, bbox2=bbox1)  # [2, M]
-    # proj_uv21_ext = proj_uv21[:, :, None].repeat(N, axis=2)
-    # pos1_ext = pos1[:, None, :].repeat(M, axis=1)
-    # error_uv21 = proj_uv21_ext - pos1_ext
-    # error_uv21 = np.sqrt(np.sum(error_uv21 ** 2, axis=0))
-    # matches_21 = np.argmin(error_uv21, axis=1)
-    # errors_21 = error_uv21[np.arange(error_uv21.shape[0]), matches_21]
-    # inlier_ids21 = np.where(errors_21 <= inlier_th)
-
-    # print('inliers: ', inlier_ids12, len(inlier_ids21))
-
-    # do cycle reprojection
-    # print('matches: ', inlier_matches12.shape, pos1.shape, pos2.shape)
     matched_pos1 = pos1[:, inlier_matches12[:, 0]]
     matched_pos2 = pos2[:, inlier_matches12[:, 1]]
     matched_depth2 = depth2[inlier_matches12[:, 1]]
@@ -253,9 +218,6 @@ def match_from_projection_points(
     inlier_cycle = inlier_matches12[inliers21]
     outlier_cycle = np.vstack([inlier_matches12[~inliers21], outlier_matches12])
 
-    # print('inliers: ', inlier_matches12.shape, np.sum(inliers21), inlier_cycle.shape, outlier_matches12.shape,
-    #       outlier_cycle.shape)
-    # return inlier_matches12, outlier_matches12
     return inlier_cycle, outlier_cycle
 
 
@@ -302,21 +264,6 @@ def match_from_projection_points_torch(
     if not cycle_check:
         return inlier_matches12, outlier_matches12
 
-    # do cycle reprojection
-    # proj_uv21 = reproject(pos1=pos2, depth1=depth2, intrinsics1=intrinsics2, pose1=pose2, bbox1=bbox2,
-    #                       intrinsics2=intrinsics1, pose2=pose1, bbox2=bbox1)  # [2, M]
-    # proj_uv21_ext = proj_uv21[:, :, None].repeat(N, axis=2)
-    # pos1_ext = pos1[:, None, :].repeat(M, axis=1)
-    # error_uv21 = proj_uv21_ext - pos1_ext
-    # error_uv21 = np.sqrt(np.sum(error_uv21 ** 2, axis=0))
-    # matches_21 = np.argmin(error_uv21, axis=1)
-    # errors_21 = error_uv21[np.arange(error_uv21.shape[0]), matches_21]
-    # inlier_ids21 = np.where(errors_21 <= inlier_th)
-
-    # print('inliers: ', inlier_ids12, len(inlier_ids21))
-
-    # do cycle reprojection
-    # print('matches: ', inlier_matches12.shape, pos1.shape, pos2.shape)
     matched_pos1 = pos1[:, inlier_matches12[:, 0]]
     matched_pos2 = pos2[:, inlier_matches12[:, 1]]
     matched_depth2 = depth2[inlier_matches12[:, 1]]
@@ -330,10 +277,6 @@ def match_from_projection_points_torch(
     outlier21 = (error_uv21 >= outlier_th)
 
     inlier_cycle = inlier_matches12[inliers21]
-    outlier_cycle = torch.vstack([inlier_matches12[outlier21], outlier_matches12])
-    # print('inliers: ', inlier_matches12.shape, np.sum(inliers21), inlier_cycle.shape, outlier_matches12.shape,
-    #       outlier_cycle.shape)
-    # return inlier_matches12, outlier_matches12
     return inlier_cycle, outlier_matches12
 
 

@@ -10,7 +10,7 @@ import numpy as np
 import cv2
 
 
-def decompose_essestial_mat(E, pts0, pts1, K0, K1, distance_thresh=1000):
+def decompose_essential_mat(E, pts0, pts1, K0, K1, distance_thresh=1000):
     def get_mask_from_pts4D(pts4D, P):
         Q = deepcopy(pts4D)
         mask = (Q[2] * Q[3]) > 0
@@ -107,7 +107,7 @@ def estimate_pose(kpts0, kpts1, K0, K1, norm_thresh, conf=0.99999, method=cv2.RA
     if E is None or E.shape[0] != 3 or E.shape[1] != 3:
         return None
 
-    R, t, mask_P = decompose_essestial_mat(E=E, pts0=kpts0[E_mask.ravel() > 0], pts1=kpts1[E_mask.ravel() > 0],
+    R, t, mask_P = decompose_essential_mat(E=E, pts0=kpts0[E_mask.ravel() > 0], pts1=kpts1[E_mask.ravel() > 0],
                                            K0=K0, K1=K1)
 
     mask = E_mask.ravel() >= 0

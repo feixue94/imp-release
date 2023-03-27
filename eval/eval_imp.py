@@ -20,8 +20,8 @@ from nets.adgm import AdaGMN
 from components.utils.evaluation_utils import normalize_intrinsic
 from components.utils.metrics import compute_epi_inlier
 from tools.utils import compute_pose_error, pose_auc
-from tools.utils import estimate_pose_m_v2
-from eval.matching import matching_iterative
+from eval.pose_estimation import estimate_pose
+from eval.matching import matching_iterative, matching_iterative_uncertainty
 
 parser = argparse.ArgumentParser(description='IMP', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--matching_method', type=str, default='IMP')
@@ -92,17 +92,29 @@ def eval(model):
         }
 
         if use_iterative:
-            # matches, conf, pred_R, pred_t, ni = matching_iterative_v5(
-            matches, conf, pred_R, pred_t, ni = matching_iterative(
-                nI=nI,
-                data=feed_data,
-                model=model,
-                error_th=error_th,
-                stop_criteria=stop_criteria,
-                match_ratio=0.1,
-                method=cv2.USAC_MAGSAC,
-                min_kpts=25,
-            )
+            if use_uncertainty:
+                pts0, pts1, norm_pts0, norm_pts1, matches, conf, pred_R, pred_t, ni = matching_iterative_uncertainty(
+                    nI=nI,
+                    data=feed_data,
+                    model=model,
+                    error_th=error_th,
+                    stop_criteria=stop_criteria,
+                    match_ratio=0.1,
+                    method=cv2.USAC_MAGSAC,
+                    min_kpts=25,
+                    with_uncertainty=use_uncertainty,
+                )
+            else:
+                matches, conf, pred_R, pred_t, ni = matching_iterative(
+                    nI=nI,
+                    data=feed_data,
+                    model=model,
+                    error_th=error_th,
+                    stop_criteria=stop_criteria,
+                    match_ratio=0.1,
+                    method=cv2.USAC_MAGSAC,
+                    min_kpts=25,
+                )
 
             valid = (matches > -1)
             mconf = conf[valid]
@@ -111,9 +123,6 @@ def eval(model):
 
             mkpts0 = pts0[valid]
             mkpts1 = pts1[matches[valid]]
-
-            # epi_errs = compute_epipolar_error(mkpts0, mkpts1, T_0to1, K0, K1)
-            # correct = epi_errs <= acc_error_th
             norm_mkpts0 = norm_pts0[valid]
             norm_mkpts1 = norm_pts1[matches[valid]]
 
@@ -125,7 +134,7 @@ def eval(model):
 
             if pred_R is None:
                 print('pred_R is None')
-                ret = estimate_pose_m_v2(mkpts0, mkpts1, K0, K1, error_th, method=cv2.USAC_MAGSAC)
+                ret = estimate_pose(mkpts0, mkpts1, K0, K1, error_th, method=cv2.USAC_MAGSAC)
                 if ret is None:
                     err_t, err_R = np.inf, np.inf
                 else:
@@ -157,7 +166,6 @@ def eval(model):
                 'scores0': torch.from_numpy(scores0).cuda().float()[None],
                 'scores1': torch.from_numpy(scores1).cuda().float()[None],
 
-                # 'matching_mask': torch.randint(0, 1, size=(2001, 2001)).cuda()[None]
             },
                 p=0.2,
                 only_last=True,
@@ -181,15 +189,8 @@ def eval(model):
             num_iterations[nI] += 1
 
             valid = (matches > -1)
-            mconf = conf[valid]
-
-            pred_matches = np.vstack([np.where(matches > -1), matches[valid]]).transpose()
-            # print(pred_matches.shape)
-
             mkpts0 = pts0[valid]
             mkpts1 = pts1[matches[valid]]
-            # epi_errs = compute_epipolar_error(mkpts0, mkpts1, T_0to1, K0, K1)
-            # correct = epi_errs <= acc_error_th
             norm_mkpts0 = norm_pts0[valid]
             norm_mkpts1 = norm_pts1[matches[valid]]
             correct, epi_errs = compute_epi_inlier(x1=norm_mkpts0, x2=norm_mkpts1, E=E, inlier_th=0.005,
@@ -199,8 +200,7 @@ def eval(model):
             matching_score = num_correct / len(pts0) if len(pts0) > 0 else 0
             precision = np.mean(correct) if len(correct) > 0 else 0
 
-            ret = estimate_pose_m_v2(mkpts0, mkpts1, K0, K1, error_th, method=cv2.USAC_MAGSAC)
-            # ret = estimate_pose_m(mkpts0, mkpts1, K0, K1, error_th, method=method)
+            ret = estimate_pose(mkpts0, mkpts1, K0, K1, error_th, method=cv2.USAC_MAGSAC)
 
             if ret is None:
                 err_t, err_R = np.inf, np.inf
@@ -224,8 +224,6 @@ def eval(model):
         print('AUC@5\t AUC@10\t AUC@20\t AUC@50\t Prec\t MScore\t Mkpts \t Ikpts')
         print('{:.2f}\t {:.2f}\t {:.2f}\t {:.2f}\t {:.2f}\t {:.2f}\t'.format(
             aucs[0], aucs[1], aucs[2], aucs[3], prec, ms))
-        # print('Its: ')
-        # print(num_iterations.shape, len(pose_errors), num_iterations[1])
         for ni in range(nI):
             print('It {:d} with {:.2f}'.format(ni + 1, num_iterations[ni + 1, 0] / len(pose_errors)))
 
@@ -314,8 +312,8 @@ if __name__ == '__main__':
         reults = eval(model=net)
 
     print(
-        'Results of model {} on {} dataset (iterative {}, sinkhorn {}, uncertainty {}'.format(matching_method,
-                                                                                              dataset,
-                                                                                              use_iterative,
-                                                                                              use_sinkhorn,
-                                                                                              use_uncertainty))
+        'Results of model {} on {} dataset (iterative: {}, sinkhorn: {}, uncertainty: {})'.format(matching_method,
+                                                                                                  dataset,
+                                                                                                  use_iterative,
+                                                                                                  use_sinkhorn,
+                                                                                                  use_uncertainty))
