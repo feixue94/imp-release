@@ -146,5 +146,7 @@ If you use any ideas from the paper or code from this repo, please consider citi
 ## Acknowledgements
 
 Part of the code is from previous excellent works
-including [SuperPoint](https://github.com/magicleap/SuperPointPretrainedNetwork), [SuperGlue]() and [SGMNet](). You can
-find more details from their released repositories if you are interested in their works. 
+including [SuperPoint](https://github.com/magicleap/SuperPointPretrainedNetwork)
+, [SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork)
+and [SGMNet](https://github.com/magicleap/SuperGluePretrainedNetwork). You can find more details from their released
+repositories if you are interested in their works. 

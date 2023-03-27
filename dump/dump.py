@@ -19,7 +19,7 @@ def get_dumper(name):
 if __name__ == '__main__':
     args = parser.parse_args()
     with open(args.config_path, 'r') as f:
-        config = yaml.load(f)
+        config = yaml.load(f, yaml.Loader)
 
     dataset = get_dumper(config['data_name'])(config)
 

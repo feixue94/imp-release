@@ -1,7 +1,7 @@
 data_name: scannet
-rawdata_dir: scannet_eval
-feature_dump_dir: scannet_test_root
-dataset_dump_dir: scannet_test_root
+rawdata_dir: /scratches/flyer_3/fx221/dataset/scannet_eval_release/data
+feature_dump_dir: /scratches/flyer_2/fx221/dataset/test_imp/scannet
+dataset_dump_dir: /scratches/flyer_2/fx221/dataset/test_imp/scannet
 
 extractor:
   name: root #root or sp

@@ -1,12 +1,12 @@
 data_name: scannet
-rawdata_dir: scannet_eval
-feature_dump_dir: scannet_test_sp
-dataset_dump_dir: scannet_test_sp
+rawdata_dir: /scratches/flyer_3/fx221/dataset/scannet_eval_release/data
+feature_dump_dir: /scratches/flyer_2/fx221/dataset/test_imp/scannet
+dataset_dump_dir: /scratches/flyer_2/fx221/dataset/test_imp/scannet
 
 extractor:
   name: sp #root or sp
   num_kpt: 1000
-  resize: [480,640]
+  resize: [ 480,640 ]
   overwrite: False
   extract: True
   num_process: 4

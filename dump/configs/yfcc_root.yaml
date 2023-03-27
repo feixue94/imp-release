@@ -1,7 +1,7 @@
 data_name: yfcc
-rawdata_dir: /yfcc_rawdata
-feature_dump_dir: yfcc_test_root
-dataset_dump_dir: yfcc_test_root
+rawdata_dir: /scratches/flyer_3/fx221/dataset/YFCC/data
+feature_dump_dir: /scratches/flyer_2/fx221/dataset/test_imp/yfcc
+dataset_dump_dir: /scratches/flyer_2/fx221/dataset/test_imp/yfcc
 data_split: ['test']
 data_seq: ['buckingham_palace', 'notre_dame_front_facade', 'reichstag', 'sacre_coeur']
 
