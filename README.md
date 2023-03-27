@@ -78,7 +78,7 @@ It requires 4 2080ti/1080ti gpus or 2 3090 gpus for batch size of 16.
 ## Results
 
 1. Download the pretrained weights
-   from [here](https://drive.google.com/drive/folders/1pI8_jnVhVX7BWa7M6H1s3GQgxrTwMncy?usp=sharing) and put them in
+   from [here](https://drive.google.com/drive/folders/1QJoXyrbYsk-ojrvGSgEpsGA0p5BVSGwZ?usp=sharing) and put them in
    the <em> weights </em> directory.
 
 2. Prepare the testing data from YFCC and Scannet datasets.
@@ -99,7 +99,7 @@ It requires 4 2080ti/1080ti gpus or 2 3090 gpus for batch size of 16.
 
 ```
 cd dump
-python3 dump.py --config_path configs/yfcc_sp.yaml
+python3 dump.py --config_path configs/yfcc_sp.yaml # copied from SGMNet
 ```
 
 You will generate a hdf5 (**yfcc_sp_2000.hdf5**) file at **dataset_dump_dir**. Please also update the **rawdata_dir**
@@ -116,7 +116,7 @@ and **dataset_dir** in **configs/yfcc_eval_gm.yaml** and **configs/yfcc_eval_gm_
 
 ```
 cd dump
-python3 dump.py --config_path configs/scannet_sp.yaml
+python3 dump.py --config_path configs/scannet_sp.yaml  # copied from SGMNet
 ```
 
 You will generate a hdf5 (**scannet_sp_1000.hdf5**) file at **dataset_dump_dir**. Please also update the **rawdata_dir**
