@@ -87,8 +87,9 @@ class Megadepth:
 
         if extract_features:
             if feature_type == 'sift':
-                self.sift = cv2.xfeatures2d.SIFT_create(nfeatures=self.nfeatures,
-                                                        contrastThreshold=0.04)
+                # self.sift = cv2.xfeatures2d.SIFT_create(nfeatures=self.nfeatures,
+                #                                         contrastThreshold=0.04)
+                self.sift = cv2.SIFT_create(nfeatures=self.nfeatures, contrastThreshold=0.04)
             elif feature_type == 'spp':
                 spp_config = {
                     'descriptor_dim': 256,
@@ -96,7 +97,7 @@ class Megadepth:
                     'keypoint_threshold': 0.001,
                     'max_keypoints': self.nfeatures,
                     'remove_borders': 4,
-                    'weight_path': '/home/mifs/fx221/Research/Code/pnba/weights/superpoint_v1.pth',
+                    'weight_path': '/weights/superpoint_v1.pth',
                     'with_compensate': True,
                 }
                 self.spp = SuperPoint(config=spp_config).eval().cuda()
@@ -114,14 +115,6 @@ class Megadepth:
                 img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             else:
                 img_gray = img
-            # kpts, descs = self.sift.detectAndCompute(img_gray, None)
-            #
-            # # print('descs: ', descs.shape, np.sqrt(np.sum((descs / 512.) ** 2, axis=1)))
-            #
-            # scores = np.array([kp.response for kp in kpts]).reshape(-1)
-            # kps = np.array([(kp.pt[0], kp.pt[1]) for kp in kpts])
-            # descs = (descs / 512.).astype(float)
-
             cv_kp, desc = self.sift.detectAndCompute(img_gray, None)
             kp = np.array([[_kp.pt[0], _kp.pt[1], _kp.response] for _kp in cv_kp])  # N*3
             index = np.flip(np.argsort(kp[:, 2]))
@@ -300,18 +293,6 @@ class Megadepth:
             if valid_ids1.shape[0] <= 20 or valid_ids2.shape[0] <= 20:
                 continue
 
-            # kpts1 = valid_kpts1
-            # depth1 = valid_depth1
-
-            # kpts2 = valid_kpts2
-            # depth2 = valid_depth2
-
-            # inlier_matches, outlier_matches = match_from_projection_points(
-            #     pos1=kpts1.transpose(), depth1=depth1, intrinsics1=intrinsics1, pose1=pose1, bbox1=None,
-            #     pos2=kpts2.transpose(), depth2=depth2, intrinsics2=intrinsics2, pose2=pose2, bbox2=None,
-            #     inlier_th=self.inlier_th, outlier_th=15, cycle_check=True,
-            # )
-
             with torch.no_grad():
                 inlier_matches, outlier_matches = match_from_projection_points_torch(
                     pos1=torch.from_numpy(valid_kpts1.transpose()).float().cuda(),
@@ -328,8 +309,6 @@ class Megadepth:
                 )
                 inlier_matches = inlier_matches.cpu().numpy()
                 outlier_matches = outlier_matches.cpu().numpy()
-
-            # print('valid1/2: ', valid_ids1.shape, valid_ids2.shape, inlier_matches.shape)
 
             if inlier_matches.shape[0] <= 20:
                 continue
@@ -368,9 +347,6 @@ class Megadepth:
                 # 'umatched_ids1': np.array(umatched_ids1, dtype=int),
                 # 'umatched_ids2': np.array(umatched_ids2, dtype=int),
             })
-
-            # if len(valid_pairs) > 10:
-            #     break
 
         if len(valid_pairs) > 0:
             np.save(osp.join(match_dir, scene), valid_pairs)
@@ -463,7 +439,7 @@ if __name__ == '__main__':
                                          batch_size=1,
                                          pin_memory=True,
                                          )
-    '''
+    # '''
     print('Start extracting keypoints...')
     for bid, data in tqdm(enumerate(loader), total=len(loader)):
         image_path = data['image_path'][0]
@@ -498,7 +474,7 @@ if __name__ == '__main__':
         np.save(save_fn, save_data)
 
     print('Finish extracting keypoints...')
-    '''
+    # '''
 
     print('Start building correspondences...')
     scene_npairs = []

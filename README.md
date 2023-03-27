@@ -128,7 +128,16 @@ and **dataset_dir** in **configs/scannet_eval_gm.yaml** and **configs/scannet_ev
 python3 -m eval.eval_imp --matching_method IMP --dataset yfcc
 ```
 
-You will get results like this:
+You will get results like this on YFCC dataset:
+
+|        | @5  | @10       | @20 |  
+| -------- | ----- | ------- |  
+| imp | 38.45 | 58.52 | 74.67  |  
+| imp_iterative | 39.4 | 59.62	| 75.28  |   
+|eimp | 36.96 | 56.76| 73.29 |  
+|eimp_iterative | 38.98	| 58.95	| 74.81|  
+
+
 
 ## BibTeX Citation
 
