@@ -29,7 +29,7 @@ complexity of attention computation in transformers.
 ## Data preparation
 
 Please download the preprocessed data of Megadepth (**scene_info** and **Undistorted_SfM**)
-from [here](https://drive.google.com/drive/folders/1N-MqvVYmyUiC0SCVfmNTIU93eereJR8R?usp=sharing).
+from [here](https://drive.google.com/drive/folders/1QJoXyrbYsk-ojrvGSgEpsGA0p5BVSGwZ?usp=sharing).
 
 The data structure of Megadepth should be like this:
 

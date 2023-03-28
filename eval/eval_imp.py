@@ -281,8 +281,8 @@ if __name__ == '__main__':
                     'yfcc': '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.190.pth',
                 },
                 'sift': {
-                    'scannet': '2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth',
-                    'yfcc': '2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth',
+                    'scannet': '2022_09_24_12_59_29_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.125.pth',
+                    'yfcc': '2022_09_24_12_59_29_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.125.pth',
                 },
             },
         },
@@ -321,14 +321,14 @@ if __name__ == '__main__':
                     'yfcc': '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.45.pth',
                 },
                 'sift': {
-                    'scannet': '2022_10_06_14_43_52_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/adagmn.110.pth',
-                    'yfcc': '2022_10_06_14_43_52_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/adagmn.110.pth',
+                    'scannet': '2022_10_12_09_45_59_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.115.pth',
+                    'yfcc': '2022_10_12_09_45_59_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.115.pth',
                 },
             }
         }
     }
     net = model_dict[matching_method]['network']
-    weight_path = model_dict[matching_method]['weight'][dataset]
+    weight_path = model_dict[matching_method]['weight'][feat][dataset]
     weight_root = '/scratches/flyer_3/fx221/exp/pnba/'
     net.load_state_dict(state_dict=torch.load(osp.join(weight_root, weight_path))['model'], strict=True)
     net = net.cuda().eval()
