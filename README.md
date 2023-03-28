@@ -17,7 +17,7 @@ complexity of attention computation in transformers.
 
 * Authors: *Fei Xue, Ignas Budvytis, Roberto Cipolla*
 
-* Website: [imp-release](https://github.com/feixue94/imp-release) for videos, slides, recent updates, and datasets.
+* Website: [imp-release](https://feixue94.github.io/) for videos, slides, recent updates, and datasets.
 
 ## Dependencies
 
