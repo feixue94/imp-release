@@ -28,9 +28,8 @@ complexity of attention computation in transformers.
 
 ## Data preparation
 
-Please download the training dataset of Megadepth following the instructions given
-by [d2net](https://github.com/mihaidusmanu/d2-net/tree/dev). D2Net provided the preprocessed sfm models and undistorted
-images on goole drive, but it is not working now, so you have to preprocess the Megadepth dataset on your own.
+Please download the preprocessed data of Megadepth (**scene_info** and **Undistorted_SfM**)
+from [here](https://drive.google.com/drive/folders/1N-MqvVYmyUiC0SCVfmNTIU93eereJR8R?usp=sharing).
 
 The data structure of Megadepth should be like this:
 
