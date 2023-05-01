@@ -13,7 +13,7 @@ geometry-aware matches progressively. Second, we introduce an efficient IMP, cal
 keypoints without potential matches, avoiding redundant updating and significantly reducing the quadratic time
 complexity of attention computation in transformers.
 
-* Full paper PDF: [IMP: Iterative Matching and Pose Estimation with Adaptive Pooling](https://arxiv.org/abs/1911.11763).
+* Full paper PDF: [IMP: Iterative Matching and Pose Estimation with Adaptive Pooling](https://arxiv.org/abs/2304.14837).
 
 * Authors: *Fei Xue, Ignas Budvytis, Roberto Cipolla*
 

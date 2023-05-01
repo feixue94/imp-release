@@ -10,3 +10,5 @@ tmp/*.txt
 build_matches_*
 mega_nvalid
 mega_nvalid_sift
+weights/imp_*
+weights/eimp_*

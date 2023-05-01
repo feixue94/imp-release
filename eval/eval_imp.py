@@ -277,12 +277,12 @@ if __name__ == '__main__':
 
             'weight': {
                 'spp': {
-                    'scannet': '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.185.pth',
-                    'yfcc': '2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.190.pth',
+                    'scannet': 'imp_geo_spp_scannet.pth',
+                    'yfcc': 'imp_geo_spp_yfcc.pth',
                 },
                 'sift': {
-                    'scannet': '2022_09_24_12_59_29_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.125.pth',
-                    'yfcc': '2022_09_24_12_59_29_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.125.pth',
+                    'scannet': 'imp_geo_sift.pthh',
+                    'yfcc': 'imp_geo_sift.pth',
                 },
             },
         },
@@ -291,12 +291,12 @@ if __name__ == '__main__':
 
             'weight': {
                 'spp': {
-                    'scannet': '2022_07_15_13_49_43_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/dgnns.885.pth',
-                    'yfcc': '2022_07_15_13_49_43_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/dgnns.885.pth',
+                    'scannet': 'imp_spp.pth',
+                    'yfcc': 'imp_spp.pth',
                 },
                 'sift': {
-                    'scannet': '2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth',
-                    'yfcc': '2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth',
+                    'scannet': 'imp_sift.pth',
+                    'yfcc': 'imp_sift.pth',
                 },
             }
         },
@@ -304,12 +304,12 @@ if __name__ == '__main__':
             'network': AdaGMN(config=config),
             'weight': {
                 'spp': {
-                    'scannet': '2022_10_06_15_06_23_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/adagmn.100.pth',
-                    'yfcc': '2022_10_06_15_06_23_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/adagmn.100.pth',
+                    'scannet': 'eimp_spp.pth',
+                    'yfcc': 'eimp_spp.pth',
                 },
                 'sift': {
-                    'scannet': '2022_10_06_14_43_52_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/adagmn.110.pth',
-                    'yfcc': '2022_10_06_14_43_52_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/adagmn.110.pth',
+                    'scannet': 'eimp_sift.pth',
+                    'yfcc': 'eimp_sift.pth',
                 },
             }
         },
@@ -317,19 +317,19 @@ if __name__ == '__main__':
             'network': AdaGMN(config=config),
             'weight': {
                 'spp': {
-                    'scannet': '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.75.pth',
-                    'yfcc': '2022_10_06_19_55_55_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.45.pth',
+                    'scannet': 'eimp_geo_spp_scannet.pth',
+                    'yfcc': 'eimp_geo_spp_yfcc.pth',
                 },
                 'sift': {
-                    'scannet': '2022_10_12_09_45_59_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.115.pth',
-                    'yfcc': '2022_10_12_09_45_59_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.115.pth',
+                    'scannet': 'eimp_geo_sift.pth',
+                    'yfcc': 'eimp_geo_sift.pth',
                 },
             }
         }
     }
     net = model_dict[matching_method]['network']
     weight_path = model_dict[matching_method]['weight'][feat][dataset]
-    weight_root = '/scratches/flyer_3/fx221/exp/pnba/'
+    weight_root = 'weights'
     net.load_state_dict(state_dict=torch.load(osp.join(weight_root, weight_path))['model'], strict=True)
     net = net.cuda().eval()
 
