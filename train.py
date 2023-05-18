@@ -31,7 +31,7 @@ import torch.distributed as dist
 
 torch.set_grad_enabled(True)
 
-parser = argparse.ArgumentParser(description='Superglue', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(description='IMP', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--eval', action='store_true', help='evaluation')
 parser.add_argument('--max_keypoints', type=int, default=512, help='the maximum number of keypoints')
 parser.add_argument('--keypoint_th', type=float, default=0.005, help='threshold of superpoint detector')
@@ -120,6 +120,7 @@ if __name__ == '__main__':
         'GNN_layers': ['self', 'cross'] * args.layers,
         'n_layers': args.layers,
         'ac_fn': args.ac_fn,
+        'norm_fn': args.norm_fn,
         'with_sinkhorn': (args.with_sinkhorn > 0),
 
         # for adaptive pooling

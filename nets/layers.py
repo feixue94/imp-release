@@ -154,7 +154,7 @@ class AttentionalGNN(nn.Module):
                  norm_fn: str = 'bn'):
         super().__init__()
         self.layers = nn.ModuleList([
-            AttentionalPropagation(feature_dim, 4)
+            AttentionalPropagation(feature_dim, 4, ac_fn=ac_fn, norm_fn=norm_fn)
             for _ in range(len(layer_names))])
         self.names = layer_names
 
