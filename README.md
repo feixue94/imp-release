@@ -7,11 +7,13 @@
 In this paper we propose an iterative matching and pose estimation framework (IMP) leveraging the geometric connections
 between the two tasks: a few good matches are enough for a roughly accurate pose estimation; a roughly accurate pose can
 be used to guide the matching by providing geometric constraints. To this end, we implement a geometry-aware recurrent
-attention-based module which jointly outputs sparse matches and camera poses. Specif- ically, for each iteration, we
+attention-based module which jointly outputs sparse matches and camera poses. Specifically, for each iteration, we
 first implicitly embed geometric information into the module via a pose-consistency loss, allowing it to predict
 geometry-aware matches progressively. Second, we introduce an efficient IMP, called EIMP, to dynamically discard
 keypoints without potential matches, avoiding redundant updating and significantly reducing the quadratic time
 complexity of attention computation in transformers.
+
+With this code, you can train your own matcher from scratch with better performance than SuperGlue.
 
 * Full paper PDF: [IMP: Iterative Matching and Pose Estimation with Adaptive Pooling](https://arxiv.org/abs/2304.14837).
 
