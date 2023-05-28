@@ -1,7 +1,7 @@
 # IMP: Iterative Matching and Pose Estimation with Adaptive Pooling
 
 <p align="center">
-  <img src="assets/overview.png" width="960">
+  <img src="assets/IMP.gif" width="960">
 </p>
 
 In this paper we propose an iterative matching and pose estimation framework (IMP) leveraging the geometric connections
