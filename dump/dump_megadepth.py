@@ -486,6 +486,6 @@ if __name__ == '__main__':
     mega_scene_pairs = {}
     for d in scene_npairs:
         mega_scene_pairs = {**mega_scene_pairs, **d}
-    np.save('asserts/mega_nvalid_{:s}'.format(feat_type), mega_scene_pairs)
+    np.save('assets/mega_nvalid_{:s}'.format(feat_type), mega_scene_pairs)
 
     print('Finish building correspondences...')
