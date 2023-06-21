@@ -45,6 +45,97 @@ class DGNNS(GM):
         self.last_cross_packs0 = None
         self.last_cross_packs1 = None
 
+    def forward_train(self, data):
+        desc0, desc1 = data['descriptors0'], data['descriptors1']
+        kpts0, kpts1 = data['keypoints0'], data['keypoints1']
+        scores0, scores1 = data['scores0'], data['scores1']
+
+        desc0 = desc0.transpose(1, 2)  # [B, D, N]
+        desc1 = desc1.transpose(1, 2)
+
+        if kpts0.shape[1] == 0 or kpts1.shape[1] == 0:  # no keypoints
+            shape0, shape1 = kpts0.shape[:-1], kpts1.shape[:-1]
+            return {
+                'matches0': kpts0.new_full(shape0, -1, dtype=torch.int)[0],
+                'matches1': kpts1.new_full(shape1, -1, dtype=torch.int)[0],
+                'matching_scores0': kpts0.new_zeros(shape0)[0],
+                'matching_scores1': kpts1.new_zeros(shape1)[0],
+                'skip_train': True
+            }
+        # Keypoint normalization.
+        if 'norm_keypoints0' in data.keys() and 'norm_keypoints1' in data.keys():
+            norm_kpts0 = data['norm_keypoints0']
+            norm_kpts1 = data['norm_keypoints1']
+        elif 'image0' in data.keys() and 'image1' in data.keys():
+            norm_kpts0 = normalize_keypoints(kpts0, data['image0'].shape)
+            norm_kpts1 = normalize_keypoints(kpts1, data['image1'].shape)
+        else:
+            raise ValueError('Require image shape for keypoint coordinate normalization')
+
+        # Keypoint MLP encoder.
+        enc0, enc1 = self.encode_keypoint(norm_kpts0=norm_kpts0, norm_kpts1=norm_kpts1, scores0=scores0,
+                                          scores1=scores1)
+        desc0 = desc0 + enc0
+        desc1 = desc1 + enc1
+        bs = desc0.shape[0]
+
+        all_desc0s = []
+        all_desc1s = []
+
+        # used for sharing attention
+        self_attentions = [None]
+        cross_attentions = [None]
+
+        for i, (layer, name) in enumerate(zip(self.gnn.layers, self.gnn.names)):
+            if name == 'cross':
+                delta = layer(torch.cat([desc0, desc1], dim=0), torch.cat([desc1, desc0], dim=0),
+                              cross_attentions[-1], None)
+                # cross_prob = torch.cat([layer.prob[bs:], layer.prob[:bs]], dim=0)  # [1->0, 0->1]
+                cross_attentions.append(layer.prob)
+
+                delta0 = delta[:bs]
+                delta1 = delta[bs:]
+            else:
+                delta = layer(torch.cat([desc0, desc1], dim=0), torch.cat([desc0, desc1], dim=0),
+                              self_attentions[-1], None)
+                # self_prob = layer.prob
+                self_attentions.append(layer.prob)
+
+                delta0 = delta[:bs]
+                delta1 = delta[bs:]
+
+            desc0 = desc0 + delta0
+            desc1 = desc1 + delta1
+
+            if name == 'cross':
+                all_desc0s.append(desc0)
+                all_desc1s.append(desc1)
+
+        nI = len(all_desc0s)
+        nB = desc0.shape[0]
+
+        mdescs0 = []
+        mdescs1 = []
+        for l, d0, d1 in zip(self.final_proj, all_desc0s, all_desc1s):
+            md = l(torch.vstack([d0, d1]))
+            mdescs0.append(md[:nB])
+            mdescs1.append(md[nB:])
+        mdescs = torch.vstack([torch.vstack(mdescs0), torch.vstack(mdescs1)])
+
+        dist = torch.einsum('bdn,bdm->bnm', mdescs[:nI * nB], mdescs[nI * nB:])
+        dist = dist / self.config['descriptor_dim'] ** .5
+        score = self.compute_score(dist=dist, dustbin=self.bin_score, iteration=self.sinkhorn_iterations)
+
+        loss_out = self.match_net(score, data['matching_mask'].repeat(nI, 1, 1))
+
+        all_scores = [score[i * nB: (i + 1) * nB] for i in range(nI)]
+        loss_out['scores'] = all_scores
+        loss = loss_out['matching_loss']
+
+        loss_out['loss'] = loss
+
+        return loss_out
+
     def produce_matches(self, data, p=0.2, only_last=False, **kwargs):
         """Run SuperGlue on a pair of keypoints and descriptors"""
         desc0, desc1 = data['descriptors0'], data['descriptors1']

@@ -5,15 +5,6 @@
 @Author fx221@cam.ac.uk
 @Date   21/03/2023 21:45
 =================================================='''
-
-# -*- coding: UTF-8 -*-
-'''=================================================
-@Project -> File   pnba -> train
-@IDE    PyCharm
-@Author fx221@cam.ac.uk
-@Date   07/12/2021 14:22
-=================================================='''
-
 import argparse
 import json
 import os

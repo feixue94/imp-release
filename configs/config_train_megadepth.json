@@ -1,8 +1,8 @@
 {
   "name": "IMP",
   "dataset": "megadepth",
-  "network_0": "gm",
-  "network": "dgnns",
+  "network": "gm",
+  "network_1": "dgnns",
   "network_2": "adagmn",
   "gpu": [
     0,
@@ -42,17 +42,10 @@
   "decay_rate": 0.999992,
   "decay_iter": 200000,
   "eval_config": "configs/config_evaluation.json",
-  "batch_size": 8,
+  "batch_size": 16,
   "with_dist": 1,
   "with_sinkhorn": 1,
   "with_pose": 0,
   "weight_path": "None",
-  "weight_path_spp_pose": "2022_09_09_19_20_39_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.220.pth",
-  "weight_path_spp": "2022_07_15_13_49_43_dgnns_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/dgnns.875.pth",
-  "weight_path_sift": "2022_09_13_17_25_56_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_MS_MP/dgnns.610.pth",
-  "weight_path_sift_pose": "2022_09_24_12_59_29_dgnns_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/dgnns.125.pth",
-  "resume_path": "None",
-  "resume_path_1": "2022_11_24_14_52_34_dgnn_L9_megadepth_spp_B16_K1024_M0.2_relu_in_adam_MS_MP/dgnn.559.pth",
-  "resume_path_spp": "2022_10_06_15_06_23_adagmn_L15_megadepth_spp_B16_K1024_M0.2_relu_in_MS_MP/adagmn.64.pth",
-  "resume_path_": "2022_10_12_09_45_59_adagmn_L15_megadepth_sift_B16_K1024_M0.2_relu_in_P512_MS_MP/adagmn.91.pth"
+  "resume_path": "None"
 }
