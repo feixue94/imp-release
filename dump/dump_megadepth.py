@@ -97,7 +97,7 @@ class Megadepth:
                     'keypoint_threshold': 0.001,
                     'max_keypoints': self.nfeatures,
                     'remove_borders': 4,
-                    'weight_path': '/weights/superpoint_v1.pth',
+                    'weight_path': './weights/superpoint_v1.pth',
                     'with_compensate': True,
                 }
                 self.spp = SuperPoint(config=spp_config).eval().cuda()
@@ -175,8 +175,11 @@ class Megadepth:
     def build_correspondence(self, scene, save_dir, show_match=False, pre_load=True):
         keypoint_dir = osp.join(save_dir, 'keypoints_{:s}'.format(self.feature_type), scene)
         match_dir = osp.join(save_dir, 'matches_{:s}'.format(self.feature_type))
-        print(keypoint_dir, match_dir)
+        nmatches_info_dir = osp.join(save_dir, 'nmatches_{:s}'.format(
+            self.feature_type))  # only used for random sampling
+        print(keypoint_dir, match_dir, nmatches_info_dir)
         os.makedirs(match_dir, exist_ok=True)
+        os.makedirs(nmatches_info_dir, exist_ok=True)
 
         if osp.isfile(osp.join(match_dir, scene + '.npy')):
             return
@@ -354,7 +357,7 @@ class Megadepth:
         print('Find {:d}/{:d} valid pairs from scene {:s}'.format(len(valid_pairs), len(selected_ids), scene))
         scene_nvalid = {}
         scene_nvalid[scene] = len(valid_pairs)
-        np.save('{:s}_nvalid_{:s}'.format(scene, self.feature_type), scene_nvalid)
+        np.save(osp.join(save_dir, nmatches_info_dir, '{:s}_{:s}'.format(s, self.feature_type)), scene_nvalid)
         del all_keypoints
 
     def write_matches(self, save_dir, scene_list):
@@ -364,7 +367,6 @@ class Megadepth:
         for fn in tqdm(scene_list, total=len(scene_list)):
             if not osp.isfile(osp.join(match_dir, fn + ".npy")):
                 continue
-            print('Process: ', fn)
             data = np.load(osp.join(match_dir, fn + ".npy"), allow_pickle=True)
 
             save_dir_scene = osp.join(save_root, fn.split('.')[0])
@@ -409,10 +411,10 @@ if __name__ == '__main__':
     args = parse.parse_args()
     feat_type = args.feature_type
     base_path = args.base_path  # '/scratches/flyer_3/fx221/dataset/Megadepth'
-    scene_list_fn = 'assets/megadepth_scenes_full.txt'
+    # scene_list_fn = 'assets/megadepth_scenes_full.txt' # for training
+    scene_list_fn = 'assets/megadepth_scenes_debug.txt'  # for test only
     save_path = args.save_path
 
-    # save_dir = '/scratches/flyer_3/fx221/dataset/Megadepth/training_data'
     save_path_keypoint = osp.join(save_path, 'keypoints_{:s}'.format(feat_type))
 
     scenes = []
@@ -420,7 +422,7 @@ if __name__ == '__main__':
         lines = f.readlines()
         for l in lines:
             scenes.append(l.strip())
-
+    # '''
     scene_info_path = osp.join(base_path, 'scene_info')
     mega = Megadepth(scene_info_path=scene_info_path,
                      base_path=base_path,
@@ -439,8 +441,9 @@ if __name__ == '__main__':
                                          batch_size=1,
                                          pin_memory=True,
                                          )
-    # '''
+
     print('Start extracting keypoints...')
+    # '''
     for bid, data in tqdm(enumerate(loader), total=len(loader)):
         image_path = data['image_path'][0]
         depth_path = data['depth_path'][0]
@@ -479,13 +482,20 @@ if __name__ == '__main__':
     print('Start building correspondences...')
     scene_npairs = []
     for s in scenes:  # you can split it into several slices and do them parallelly
-        s_pairs = mega.build_correspondence(scene=s, save_dir=save_path, show_match=False, pre_load=True)
+        s_pairs = mega.build_correspondence(scene=s, save_dir=save_path, show_match=True, pre_load=True)
         mega.write_matches(save_dir=save_path, scene_list=[s])
+        scene_npairs.append(s_pairs)
 
-    # merge scene-pairs to a single file
+    # '''
+    # merge scene-pairs to a single file for random sampling in the training process
     mega_scene_pairs = {}
-    for d in scene_npairs:
-        mega_scene_pairs = {**mega_scene_pairs, **d}
-    np.save('assets/mega_nvalid_{:s}'.format(feat_type), mega_scene_pairs)
+    for s in scenes:
+        s_info_path = osp.join(save_path, 'nmatches_{:s}'.format(feat_type), '{:s}_{:s}.npy'.format(s, feat_type))
+        if not osp.isfile(s_info_path):
+            print('The matching info of scene {:s} does not exist.'.format(s))
+            continue
+        scene_info = np.load(s_info_path, allow_pickle=True)[()]
+        mega_scene_pairs = {**mega_scene_pairs, **scene_info}
+    np.save(osp.join(save_path, 'mega_scene_nmatches_{:s}'.format(feat_type)), mega_scene_pairs)
 
     print('Finish building correspondences...')

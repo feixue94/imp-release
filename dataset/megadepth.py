@@ -76,9 +76,13 @@ class Megadepth(Dataset):
         self.keypoints = {}
         self.matches = matches
         if feature_type == 'spp':
-            self.scene_nvalid_pairs = np.load('assets/mega_scene_nmatches_spp.npy', allow_pickle=True).item()
+            # self.scene_nvalid_pairs = np.load('assets/mega_scene_nmatches_spp.npy', allow_pickle=True).item()
+            self.scene_nvalid_pairs = np.load(osp.join(self.base_path, 'mega_scene_nmatches_spp.npy'),
+                                              allow_pickle=True).item()
         else:
-            self.scene_nvalid_pairs = np.load('assets/mega_scene_nmatches_sift.npy', allow_pickle=True).item()
+            # self.scene_nvalid_pairs = np.load('assets/mega_scene_nmatches_sift.npy', allow_pickle=True).item()
+            self.scene_nvalid_pairs = np.load(osp.join(self.base_path, 'mega_scene_nmatches_sift.npy'),
+                                              allow_pickle=True).item()
 
         self.build_dataset(seed=0)
 
@@ -89,7 +93,7 @@ class Megadepth(Dataset):
         scene_fn = pair[0]
         pair_id = pair[1]
         data = np.load(
-            osp.join(self.base_path, 'training_data/matches_sep_{:s}'.format(self.feature_type), scene_fn,
+            osp.join(self.base_path, 'matches_sep_{:s}'.format(self.feature_type), scene_fn,
                      "{:d}.npy".format(pair_id)),
             allow_pickle=True).item()
         '''
@@ -106,9 +110,9 @@ class Megadepth(Dataset):
         # print('m1: ', len(matched_ids1) + len(unmatched_ids1), len(matched_ids2) + len(unmatched_ids2))
 
         scene = image_path1.split('/')[1]
-        feat_fn1 = osp.join(self.base_path, 'training_data/keypoints', scene,
+        feat_fn1 = osp.join(self.base_path, 'keypoints_{:s}'.format(self.feature_type), scene,
                             image_path1.split('/')[-1] + "_{:s}.npy".format(self.feature_type))
-        feat_fn2 = osp.join(self.base_path, 'training_data/keypoints', scene,
+        feat_fn2 = osp.join(self.base_path, 'keypoints_{:s}'.format(self.feature_type), scene,
                             image_path2.split('/')[-1] + "_{:s}.npy".format(self.feature_type))
 
         if feat_fn1 in self.invalid_fns or feat_fn2 in self.invalid_fns:

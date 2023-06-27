@@ -7,8 +7,8 @@
 In this paper we propose an iterative matching and pose estimation framework (IMP) leveraging the geometric connections
 between the two tasks: a few good matches are enough for a roughly accurate pose estimation; a roughly accurate pose can
 be used to guide the matching by providing geometric constraints. To this end, we implement a geometry-aware recurrent
-attention-based module which jointly outputs sparse matches and camera poses. Specifically, for each iteration, we
-first implicitly embed geometric information into the module via a pose-consistency loss, allowing it to predict
+attention-based module which jointly outputs sparse matches and camera poses. Specifically, for each iteration, we first
+implicitly embed geometric information into the module via a pose-consistency loss, allowing it to predict
 geometry-aware matches progressively. Second, we introduce an efficient IMP, called EIMP, to dynamically discard
 keypoints without potential matches, avoiding redundant updating and significantly reducing the quadratic time
 complexity of attention computation in transformers.
@@ -58,16 +58,24 @@ The data structure of generated samples for training should like this:
 
 ```
 - your_save_path
-    - keypoints
+    - keypoints_spp
         - 0000
             - 3409963756_f34ab1229a_o.jpg_spp.npy
-    - matches
+    - matches_spp # not used in the training process
         - 0000
             - 0.npy
+    - matches_sep # this is used for loading data with multi-thread (tried h5py, but failed)
+        - 0000
+            - 0.npy
+    - nmatches_spp # contains the number of valid matches (used for ramdom sampling in the training process)
+        - 0000_spp.npy 
+    - mega_scene_nmatches_spp.npy # merged info of all scenes in nmatches_spp
 ```
 
 Instead of generating training samples offline, you can also do it online and adopt augmentations (e.g. perspective
-transformation, illumination changes) to further improve the ability of the model.
+transformation, illumination changes) to further improve the ability of the model. Since this process is time-consuming
+and there might be bugs in the code, it would be better to do a test of dumping and training on scenes in <em>
+assets/megadepth_scenes_debug.txt </em>.
 
 ## Training
 
@@ -78,7 +86,8 @@ training as:
 python3 train.py --config configs/config_train_megadepth.json
 ```
 
-It requires 4 2080ti/1080ti gpus or 2 3090 gpus for batch size of 16.
+The <em> base_path </em> in configs/config_train_megadepth.json should be the same as the <em> save_path </em> used
+in <em> dump_megadepth </em>. It requires 4 2080ti/1080ti gpus or 2 3090 gpus for batch size of 16.
 
 ## Results
 
