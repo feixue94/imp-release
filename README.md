@@ -67,7 +67,7 @@ The data structure of generated samples for training should like this:
     - matches_sep # this is used for loading data with multi-thread (tried h5py, but failed)
         - 0000
             - 0.npy
-    - nmatches_spp # contains the number of valid matches (used for ramdom sampling in the training process)
+    - nmatches_spp # contains the number of valid matches (used for random sampling in the training process)
         - 0000_spp.npy 
     - mega_scene_nmatches_spp.npy # merged info of all scenes in nmatches_spp
 ```
@@ -153,7 +153,7 @@ You will get results like this on YFCC dataset:
 
 ## BibTeX Citation
 
-If you use any ideas from the paper or code from this repo, please consider citing:
+If you use any ideas from the paper or code in this repo, please consider citing:
 
 ```
 @inproceedings{xue2022imp,
