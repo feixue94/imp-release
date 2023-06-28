@@ -13,7 +13,9 @@ geometry-aware matches progressively. Second, we introduce an efficient IMP, cal
 keypoints without potential matches, avoiding redundant updating and significantly reducing the quadratic time
 complexity of attention computation in transformers.
 
-With this code, you can train your own matcher from scratch with better performance than SuperGlue.
+With this code, you can train your own matcher from scratch with better performance than SuperGlue. As a trained model
+supports different number of iterations (self/cross), you can choose a light version with fewer layers for easy tasks,
+e.g., VO/SLAM and a heavy version with more layers for tough tasks such as long-term relocalization.
 
 * Full paper PDF: [IMP: Iterative Matching and Pose Estimation with Adaptive Pooling](https://arxiv.org/abs/2304.14837).
 
